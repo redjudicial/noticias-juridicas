@@ -7,8 +7,10 @@ Genera resúmenes ejecutivos y procesa metadata
 import os
 import sys
 import re
+import hashlib
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
+from dataclasses import dataclass
 import openai
 from dotenv import load_dotenv
 

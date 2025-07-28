@@ -21,16 +21,17 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from backend.database.supabase_client import SupabaseClient
 from backend.processors.content_processor import ContentProcessor
-from backend.scrapers.poder_judicial_scraper import PoderJudicialScraper
-from backend.scrapers.tribunal_constitucional_scraper import TribunalConstitucionalScraper
-from backend.scrapers.dpp_scraper import DPPScraper
-from backend.scrapers.diario_oficial_scraper import DiarioOficialScraper
-from backend.scrapers.rss_scrapers import (
-    FiscaliaScraper,
+
+# Importar scrapers desde la estructura modular
+from backend.scrapers.fuentes import (
+    PoderJudicialScraper,
     ContraloriaScraper,
-    CDEScraper
+    CDEScraper,
+    TDLScraper,
+    PrimerTribunalAmbientalScraper,
+    TercerTribunalAmbientalScraper,
+    TribunalAmbientalScraper
 )
-from backend.scrapers.ministerio_justicia_scraper import MinisterioJusticiaScraper
 
 class NoticiasJuridicasSystem:
     """Sistema principal de noticias jurídicas"""
@@ -49,24 +50,9 @@ class NoticiasJuridicasSystem:
             openai_api_key=self.config.get('openai_api_key')
         )
         
-        # Inicializar todos los scrapers
+        # Inicializar scrapers (solo los que funcionan)
         self.scrapers = {
             'poder_judicial': PoderJudicialScraper(
-                openai_api_key=self.config.get('openai_api_key')
-            ),
-            'tribunal_constitucional': TribunalConstitucionalScraper(
-                openai_api_key=self.config.get('openai_api_key')
-            ),
-            'dpp': DPPScraper(
-                openai_api_key=self.config.get('openai_api_key')
-            ),
-            'diario_oficial': DiarioOficialScraper(
-                openai_api_key=self.config.get('openai_api_key')
-            ),
-            'ministerio_justicia': MinisterioJusticiaScraper(
-                openai_api_key=self.config.get('openai_api_key')
-            ),
-            'fiscalia': FiscaliaScraper(
                 openai_api_key=self.config.get('openai_api_key')
             ),
             'contraloria': ContraloriaScraper(
@@ -74,10 +60,23 @@ class NoticiasJuridicasSystem:
             ),
             'cde': CDEScraper(
                 openai_api_key=self.config.get('openai_api_key')
+            ),
+            'tdlc': TDLScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'primer_tribunal_ambiental': PrimerTribunalAmbientalScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'tercer_tribunal_ambiental': TercerTribunalAmbientalScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'tribunal_ambiental': TribunalAmbientalScraper(
+                openai_api_key=self.config.get('openai_api_key')
             )
         }
         
         print("🚀 Sistema de noticias jurídicas inicializado")
+        print(f"📊 Scrapers disponibles: {len(self.scrapers)}")
     
     def _load_config(self) -> Dict:
         """Cargar configuración desde variables de entorno"""
@@ -312,6 +311,10 @@ def main():
     parser.add_argument('--once', action='store_true', help='Ejecutar una sola vez')
     parser.add_argument('--scheduled', action='store_true', help='Ejecutar en modo programado')
     parser.add_argument('--stats', action='store_true', help='Mostrar estadísticas')
+    parser.add_argument('--test-mode', action='store_true', help='Ejecutar en modo prueba')
+    parser.add_argument('--working-only', action='store_true', help='Solo fuentes que funcionan')
+    parser.add_argument('--max-noticias', type=int, default=20, help='Máximo número de noticias por fuente')
+    parser.add_argument('--quick', action='store_true', help='Ejecución rápida')
     
     args = parser.parse_args()
     
@@ -325,6 +328,7 @@ def main():
                 print(f"   {key}: {value}")
         
         elif args.once:
+            print(f"🎯 Ejecutando scraping una vez (max: {args.max_noticias} noticias por fuente)")
             system.run_once()
         
         elif args.scheduled:
@@ -336,6 +340,8 @@ def main():
     
     except Exception as e:
         print(f"❌ Error en el sistema: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
