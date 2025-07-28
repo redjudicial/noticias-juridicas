@@ -100,6 +100,84 @@ class PrimerTribunalAmbientalScraper(BaseScraper):
             print(f"❌ Error en 1TA: {str(e)}")
             return []
 
+    def get_noticia_completa(self, url: str) -> Dict:
+        """Obtiene el contenido completo de una noticia"""
+        try:
+            print(f"📄 Obteniendo noticia completa: {url}")
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extraer título
+            titulo_elem = soup.find(['h1', 'h2', 'h3'], class_=re.compile(r'titulo|title|entry-title'))
+            titulo = titulo_elem.get_text(strip=True) if titulo_elem else ""
+            
+            # Extraer fecha
+            fecha_elem = soup.find(['time', 'span', 'div'], class_=re.compile(r'fecha|date|time'))
+            fecha = fecha_elem.get_text(strip=True) if fecha_elem else ""
+            
+            # Extraer contenido completo
+            contenido_elem = soup.find(['article', 'div'], class_=re.compile(r'contenido|content|entry-content'))
+            if not contenido_elem:
+                contenido_elem = soup.find('body')
+            
+            contenido = ""
+            if contenido_elem:
+                # Remover elementos no deseados
+                for elem in contenido_elem.find_all(['script', 'style', 'nav', 'header', 'footer']):
+                    elem.decompose()
+                
+                contenido = contenido_elem.get_text(separator=' ', strip=True)
+            
+            return {
+                'titulo': titulo,
+                'fecha': fecha,
+                'url': url,
+                'contenido': contenido
+            }
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo noticia completa: {str(e)}")
+            return {
+                'titulo': '',
+                'fecha': '',
+                'url': url,
+                'contenido': ''
+            }
+
+    def scrape_noticias_recientes(self, max_noticias: int = 20) -> List[NoticiaEstandarizada]:
+        """Scrapea las noticias más recientes y las convierte a formato estandarizado"""
+        try:
+            print(f"🔄 Scrapeando noticias recientes de 1TA...")
+            
+            # Obtener lista de noticias
+            noticias_raw = self.get_noticias_recientes(max_noticias)
+            noticias_estandarizadas = []
+            
+            for noticia_raw in noticias_raw:
+                try:
+                    # Obtener contenido completo si no lo tiene
+                    if not noticia_raw.get('contenido'):
+                        noticia_completa = self.get_noticia_completa(noticia_raw['url'])
+                        noticia_raw.update(noticia_completa)
+                    
+                    # Procesar y estandarizar
+                    noticia_estandarizada = self.procesar_noticia(noticia_raw)
+                    if noticia_estandarizada:
+                        noticias_estandarizadas.append(noticia_estandarizada)
+                        
+                except Exception as e:
+                    print(f"⚠️ Error procesando noticia: {str(e)}")
+                    continue
+            
+            print(f"✅ 1TA: {len(noticias_estandarizadas)} noticias estandarizadas")
+            return noticias_estandarizadas
+            
+        except Exception as e:
+            print(f"❌ Error en scraping de 1TA: {str(e)}")
+            return []
+
     def extraer_contenido_completo(self, url: str) -> str:
         """Extrae el contenido completo de una noticia específica"""
         try:
