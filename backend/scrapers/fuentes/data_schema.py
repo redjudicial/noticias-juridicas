@@ -134,29 +134,29 @@ class MetadataNoticia:
 @dataclass
 class NoticiaEstandarizada:
     """Noticia estandarizada para almacenamiento en base de datos"""
-    # Información básica
+    # Información básica (requerida)
     titulo: str
+    cuerpo_completo: str
+    fecha_publicacion: datetime
+    fuente: str
+    url_origen: str
+    categoria: Categoria
+    jurisdiccion: Jurisdiccion
+    tipo_documento: TipoDocumento
+    
+    # Información básica (opcional)
     titulo_original: Optional[str] = None
     subtitulo: Optional[str] = None
     resumen_ejecutivo: Optional[str] = None
-    cuerpo_completo: str
     extracto_fuente: Optional[str] = None
     
     # Información temporal
-    fecha_publicacion: datetime
     fecha_actualizacion: Optional[datetime] = None
     fecha_scraping: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Información de fuente
-    fuente: str
     fuente_nombre_completo: Optional[str] = None
-    url_origen: str
     url_imagen: Optional[str] = None
-    
-    # Categorización
-    categoria: Categoria
-    jurisdiccion: Jurisdiccion
-    tipo_documento: TipoDocumento
     tribunal_organismo: Optional[str] = None
     
     # Palabras clave y etiquetas
