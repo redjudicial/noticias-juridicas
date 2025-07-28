@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Noticias Jurídicas</title>
+    <link rel="stylesheet" href="css/noticias.css">
+</head>
+<body>
+    <div class="widget-container">
+        <div class="widget-header">
+            <h3>Noticias Jurídicas</h3>
+            <div class="widget-filtros">
+                <select id="widget-filtro-fuente">
+                    <option value="">Todas</option>
+                    <option value="poder_judicial">Poder Judicial</option>
+                    <option value="tribunal_constitucional">TC</option>
+                    <option value="minjusticia">Min. Justicia</option>
+                    <option value="fiscalia">Fiscalía</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="widget-loading" class="loading">
+            <div class="spinner"></div>
+        </div>
+
+        <div id="widget-noticias" class="widget-noticias">
+            <!-- Noticias se cargan aquí -->
+        </div>
+
+        <div class="widget-footer">
+            <small>Actualizado cada 15 minutos</small>
+        </div>
+    </div>
+
+    <script src="js/noticias.js"></script>
+    <script>
+        // Configuración específica para widget
+        window.WIDGET_MODE = true;
+        window.MAX_NOTICIAS = 5;
+    </script>
+</body>
+</html> 

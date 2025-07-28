@@ -1,0 +1,82 @@
+name: Scraping Automático de Noticias Jurídicas
+
+on:
+  schedule:
+    # Ejecutar cada 30 minutos de lunes a viernes, 9:00-17:00 (horario chileno)
+    # UTC-3, entonces 12:00-20:00 UTC
+    - cron: '0,30 12-20 * * 1-5'  # Cada 30 min, 12-20 UTC, L-V
+  workflow_dispatch:  # Permitir ejecución manual
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/scrapers/**'
+      - 'backend/main.py'
+      - 'requirements.txt'
+
+jobs:
+  scraping:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Configurar variables de entorno
+      run: |
+        echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> $GITHUB_ENV
+        echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> $GITHUB_ENV
+        echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+        
+    - name: Crear archivo de credenciales
+      run: |
+        cat > APIS_Y_CREDENCIALES.env << EOF
+        SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+        EOF
+        
+    - name: Ejecutar scraping
+      run: |
+        python3 backend/main.py
+        
+    - name: Verificar resultados
+      run: |
+        echo "✅ Scraping completado exitosamente"
+        echo "📊 Revisando logs..."
+        if [ -f "logs_scraping.txt" ]; then
+          echo "📋 Últimas líneas del log:"
+          tail -20 logs_scraping.txt
+        fi
+        
+    - name: Commit y push de cambios
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Actualización automática de noticias - $(date '+%Y-%m-%d %H:%M:%S')"
+        git push
+        
+    - name: Notificación de éxito
+      if: success()
+      run: |
+        echo "✅ Scraping completado exitosamente"
+        echo "📅 Fecha: $(date)"
+        echo "🕐 Hora: $(date '+%H:%M:%S')"
+        
+    - name: Notificación de error
+      if: failure()
+      run: |
+        echo "❌ Error en el scraping"
+        echo "📅 Fecha: $(date)"
+        echo "🕐 Hora: $(date '+%H:%M:%S')"
+        exit 1 

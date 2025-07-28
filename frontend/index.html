@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Judicial - Noticias Jurídicas</title>
+    <link rel="stylesheet" href="css/noticias.css">
+</head>
+<body>
+    <!-- Header de Red Judicial -->
+    <header class="header">
+        <div class="container">
+            <h1>Red Judicial</h1>
+            <p>Plataforma de información jurídica</p>
+        </div>
+    </header>
+
+    <!-- Contenido principal -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Sección de Noticias Jurídicas -->
+            <section class="noticias-section">
+                <div class="noticias-header">
+                    <h2>Noticias Jurídicas</h2>
+                    <div class="noticias-filtros">
+                        <select id="filtro-fuente">
+                            <option value="">Todas las fuentes</option>
+                            <option value="poder_judicial">Poder Judicial</option>
+                            <option value="tribunal_constitucional">Tribunal Constitucional</option>
+                            <option value="minjusticia">Ministerio de Justicia</option>
+                            <option value="fiscalia">Fiscalía</option>
+                            <option value="dpp">Defensoría Penal Pública</option>
+                            <option value="contraloria">Contraloría</option>
+                            <option value="cde">Consejo de Defensa del Estado</option>
+                        </select>
+                        <select id="filtro-categoria">
+                            <option value="">Todas las categorías</option>
+                            <option value="fallos">Fallos Judiciales</option>
+                            <option value="normativa">Normativa</option>
+                            <option value="institucional">Institucional</option>
+                            <option value="penal">Penal</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Loading -->
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Cargando noticias...</p>
+                </div>
+
+                <!-- Container de noticias -->
+                <div id="noticias-container" class="noticias-container">
+                    <!-- Las noticias se cargarán aquí dinámicamente -->
+                </div>
+
+                <!-- Paginación -->
+                <div class="paginacion">
+                    <button id="btn-anterior" class="btn-pagina">← Anterior</button>
+                    <span id="info-pagina">Página 1 de 1</span>
+                    <button id="btn-siguiente" class="btn-pagina">Siguiente →</button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Red Judicial. Todas las noticias provienen de fuentes oficiales.</p>
+        </div>
+    </footer>
+
+    <script src="js/noticias.js"></script>
+</body>
+</html> 
