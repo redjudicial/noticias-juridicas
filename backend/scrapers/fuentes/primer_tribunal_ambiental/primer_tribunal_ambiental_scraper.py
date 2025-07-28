@@ -233,7 +233,7 @@ class PrimerTribunalAmbientalScraper(BaseScraper):
                 cuerpo_completo=contenido[:2000],
                 url_origen=noticia_raw.get('url', ''),
                 fecha_publicacion=fecha,
-                fuente="primer_tribunal_ambiental",
+                fuente="1ta",
                 categoria=Categoria.TRIBUNAL,
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,

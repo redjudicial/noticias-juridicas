@@ -540,11 +540,37 @@ class ContentProcessor:
         
         return None
     
+    def _aplicar_prefijo_fuente(self, titulo: str, contenido: str, fuente: str) -> Tuple[str, str]:
+        """Aplicar prefijo según la fuente para tribunales ambientales"""
+        prefijos = {
+            '1ta': '(1º)',
+            '3ta': '(3º)',
+            'tribunal_ambiental': '(2º)'
+        }
+        
+        prefijo = prefijos.get(fuente)
+        if prefijo:
+            # Aplicar prefijo al título
+            titulo_con_prefijo = f"{prefijo} {titulo}"
+            
+            # Aplicar prefijo al contenido si no empieza con el prefijo
+            if not contenido.startswith(prefijo):
+                contenido_con_prefijo = f"{prefijo} {contenido}"
+            else:
+                contenido_con_prefijo = contenido
+                
+            return titulo_con_prefijo, contenido_con_prefijo
+        
+        return titulo, contenido
+    
     def procesar_noticia_completa(self, noticia_raw: Dict) -> Dict[str, any]:
         """Procesar noticia completa con resumen ejecutivo"""
         titulo = noticia_raw.get('titulo', '')
         contenido = noticia_raw.get('contenido', '')
         fuente = noticia_raw.get('fuente', '')
+        
+        # Aplicar prefijos para tribunales ambientales
+        titulo, contenido = self._aplicar_prefijo_fuente(titulo, contenido, fuente)
         
         # Generar resumen ejecutivo
         resumen = self.generar_resumen_ejecutivo(titulo, contenido, fuente)

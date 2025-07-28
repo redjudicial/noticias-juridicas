@@ -142,7 +142,7 @@ TDLC_CONFIG = {
 }
 
 TRIBUNAL_AMBIENTAL_1TA_CONFIG = {
-    'nombre': 'Primer Tribunal Ambiental',
+    'nombre': 'Tribunal Ambiental',
     'codigo': '1ta',
     'url_base': 'https://www.1ta.cl',
     'url_noticias': 'https://www.1ta.cl/category/noticias/',
@@ -153,11 +153,12 @@ TRIBUNAL_AMBIENTAL_1TA_CONFIG = {
         'contaminación', 'evaluación ambiental', 'daño ambiental'
     ],
     'categoria': 'TRIBUNAL',
-    'jurisdiccion': 'NACIONAL'
+    'jurisdiccion': 'NACIONAL',
+    'prefijo': '(1º)'
 }
 
 TRIBUNAL_AMBIENTAL_3TA_CONFIG = {
-    'nombre': 'Tercer Tribunal Ambiental',
+    'nombre': 'Tribunal Ambiental',
     'codigo': '3ta',
     'url_base': 'https://3ta.cl',
     'url_noticias': 'https://3ta.cl/category/noticias/',
@@ -168,7 +169,8 @@ TRIBUNAL_AMBIENTAL_3TA_CONFIG = {
         'contaminación', 'evaluación ambiental', 'daño ambiental'
     ],
     'categoria': 'TRIBUNAL',
-    'jurisdiccion': 'NACIONAL'
+    'jurisdiccion': 'NACIONAL',
+    'prefijo': '(3º)'
 }
 
 TRIBUNAL_AMBIENTAL_GENERAL_CONFIG = {
@@ -183,7 +185,8 @@ TRIBUNAL_AMBIENTAL_GENERAL_CONFIG = {
         'evaluación ambiental', 'daño ambiental', 'ley 19.300'
     ],
     'categoria': 'TRIBUNAL',
-    'jurisdiccion': 'NACIONAL'
+    'jurisdiccion': 'NACIONAL',
+    'prefijo': '(2º)'
 }
 
 # ========================================

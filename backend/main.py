@@ -64,10 +64,10 @@ class NoticiasJuridicasSystem:
             'tdlc': TDLScraper(
                 openai_api_key=self.config.get('openai_api_key')
             ),
-            'primer_tribunal_ambiental': PrimerTribunalAmbientalScraper(
+            '1ta': PrimerTribunalAmbientalScraper(
                 openai_api_key=self.config.get('openai_api_key')
             ),
-            'tercer_tribunal_ambiental': TercerTribunalAmbientalScraper(
+            '3ta': TercerTribunalAmbientalScraper(
                 openai_api_key=self.config.get('openai_api_key')
             ),
             'tribunal_ambiental': TribunalAmbientalScraper(
