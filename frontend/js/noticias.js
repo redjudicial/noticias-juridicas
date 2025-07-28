@@ -1,54 +1,39 @@
 // Configuración de Supabase
-const SUPABASE_URL = 'https://your-project.supabase.co';
-const SUPABASE_KEY = 'your-anon-key';
+const SUPABASE_URL = 'https://qfomiierchksyfhxoukj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmb21paWVyY2hrc3lmaHhvdWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEwMjgxNTYsImV4cCI6MjA2NjYwNDE1Nn0.HqlptdYXjd2s9q8xHEmgQPyf6a95fosb0YT5b4asMA8';
 
 // Variables globales
 let noticias = [];
 let noticiasFiltradas = [];
 let paginaActual = 1;
-const noticiasPorPagina = 10;
-let ordenActual = 'fecha_desc'; // Por defecto: más recientes primero
+const noticiasPorPagina = 12;
 
 // Elementos del DOM
 const contenedorNoticias = document.getElementById('noticias-container');
-const filtroFuente = document.getElementById('filtro-fuente');
-const filtroCategoria = document.getElementById('filtro-categoria');
-const ordenSelect = document.getElementById('orden-select');
-const buscador = document.getElementById('buscador');
+const filtroFuente = document.getElementById('fuente-filter');
+const filtroCategoria = document.getElementById('categoria-filter');
+const ordenSelect = document.getElementById('orden-filter');
+const buscador = document.getElementById('search-input');
 const paginacion = document.getElementById('paginacion');
 const loadingSpinner = document.getElementById('loading-spinner');
-const estadisticas = document.getElementById('estadisticas');
+const totalNoticias = document.getElementById('total-noticias');
+const ultimaActualizacion = document.getElementById('ultima-actualizacion');
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    inicializarFiltros();
     cargarNoticias();
     configurarEventos();
 });
 
-function inicializarFiltros() {
-    // Configurar opciones de ordenamiento
-    ordenSelect.innerHTML = `
-        <option value="fecha_desc">Más recientes primero</option>
-        <option value="fecha_asc">Más antiguos primero</option>
-        <option value="titulo_asc">Título A-Z</option>
-        <option value="titulo_desc">Título Z-A</option>
-        <option value="fuente_asc">Fuente A-Z</option>
-        <option value="relevancia_desc">Más relevantes</option>
-    `;
-}
-
+// Cargar noticias desde Supabase
 async function cargarNoticias() {
     mostrarLoading(true);
     
     try {
-        // Cargar desde Supabase con ordenamiento por fecha/hora
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/noticias_juridicas`, {
-            method: 'GET',
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/noticias_juridicas?select=*&order=fecha_publicacion.desc`, {
             headers: {
                 'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${SUPABASE_KEY}`
             }
         });
         
@@ -57,15 +42,8 @@ async function cargarNoticias() {
         }
         
         noticias = await response.json();
-        
-        // Ordenar por fecha de publicación (más recientes primero)
-        noticias.sort((a, b) => {
-            const fechaA = new Date(a.fecha_publicacion);
-            const fechaB = new Date(b.fecha_publicacion);
-            return fechaB - fechaA; // Descendente (más reciente primero)
-        });
-        
         noticiasFiltradas = [...noticias];
+        
         actualizarEstadisticas();
         mostrarNoticias();
         
@@ -77,41 +55,49 @@ async function cargarNoticias() {
     }
 }
 
+// Configurar event listeners
 function configurarEventos() {
     // Filtros
-    filtroFuente.addEventListener('change', aplicarFiltros);
-    filtroCategoria.addEventListener('change', aplicarFiltros);
-    ordenSelect.addEventListener('change', aplicarOrdenamiento);
+    if (filtroFuente) {
+        filtroFuente.addEventListener('change', aplicarFiltros);
+    }
+    if (filtroCategoria) {
+        filtroCategoria.addEventListener('change', aplicarFiltros);
+    }
+    if (ordenSelect) {
+        ordenSelect.addEventListener('change', aplicarOrdenamiento);
+    }
     
     // Buscador con debounce
-    let timeoutBusqueda;
-    buscador.addEventListener('input', function() {
-        clearTimeout(timeoutBusqueda);
-        timeoutBusqueda = setTimeout(aplicarFiltros, 300);
-    });
+    if (buscador) {
+        let timeoutBusqueda;
+        buscador.addEventListener('input', function() {
+            clearTimeout(timeoutBusqueda);
+            timeoutBusqueda = setTimeout(aplicarFiltros, 300);
+        });
+    }
 }
 
+// Aplicar filtros
 function aplicarFiltros() {
-    const fuenteSeleccionada = filtroFuente.value;
-    const categoriaSeleccionada = filtroCategoria.value;
-    const terminoBusqueda = buscador.value.toLowerCase();
+    const fuenteSeleccionada = filtroFuente ? filtroFuente.value : '';
+    const categoriaSeleccionada = filtroCategoria ? filtroCategoria.value : '';
+    const terminoBusqueda = buscador ? buscador.value.toLowerCase() : '';
     
     noticiasFiltradas = noticias.filter(noticia => {
         // Filtro por fuente
-        if (fuenteSeleccionada && fuenteSeleccionada !== 'todas' && 
-            noticia.fuente !== fuenteSeleccionada) {
+        if (fuenteSeleccionada && noticia.fuente !== fuenteSeleccionada) {
             return false;
         }
         
         // Filtro por categoría
-        if (categoriaSeleccionada && categoriaSeleccionada !== 'todas' && 
-            noticia.categoria !== categoriaSeleccionada) {
+        if (categoriaSeleccionada && noticia.categoria !== categoriaSeleccionada) {
             return false;
         }
         
         // Filtro por búsqueda
         if (terminoBusqueda) {
-            const textoBusqueda = `${noticia.titulo} ${noticia.resumen_ejecutivo || ''} ${noticia.cuerpo_completo || ''}`.toLowerCase();
+            const textoBusqueda = `${noticia.titulo} ${noticia.resumen_ejecutivo || ''} ${noticia.fuente}`.toLowerCase();
             if (!textoBusqueda.includes(terminoBusqueda)) {
                 return false;
             }
@@ -120,16 +106,14 @@ function aplicarFiltros() {
         return true;
     });
     
-    // Aplicar ordenamiento actual
-    aplicarOrdenamiento();
-    
     paginaActual = 1;
     actualizarEstadisticas();
     mostrarNoticias();
 }
 
+// Aplicar ordenamiento
 function aplicarOrdenamiento() {
-    const orden = ordenSelect.value;
+    const orden = ordenSelect ? ordenSelect.value : 'fecha_desc';
     
     noticiasFiltradas.sort((a, b) => {
         switch (orden) {
@@ -150,107 +134,79 @@ function aplicarOrdenamiento() {
         }
     });
     
+    paginaActual = 1;
     mostrarNoticias();
 }
 
+// Mostrar noticias
 function mostrarNoticias() {
     const inicio = (paginaActual - 1) * noticiasPorPagina;
     const fin = inicio + noticiasPorPagina;
     const noticiasPagina = noticiasFiltradas.slice(inicio, fin);
     
-    contenedorNoticias.innerHTML = '';
-    
     if (noticiasPagina.length === 0) {
         contenedorNoticias.innerHTML = `
-            <div class="no-resultados">
-                <i class="fas fa-search"></i>
+            <div class="no-noticias">
+                <i class="fas fa-newspaper"></i>
                 <h3>No se encontraron noticias</h3>
-                <p>Intente ajustar los filtros o términos de búsqueda.</p>
+                <p>Intenta ajustar los filtros o vuelve más tarde.</p>
             </div>
         `;
+        paginacion.innerHTML = '';
         return;
     }
     
-    noticiasPagina.forEach(noticia => {
-        const noticiaElement = crearElementoNoticia(noticia);
-        contenedorNoticias.appendChild(noticiaElement);
-    });
+    const noticiasHTML = noticiasPagina.map(noticia => crearElementoNoticia(noticia)).join('');
+    contenedorNoticias.innerHTML = noticiasHTML;
     
     mostrarPaginacion();
 }
 
+// Crear elemento de noticia
 function crearElementoNoticia(noticia) {
-    const fecha = new Date(noticia.fecha_publicacion);
-    const fechaFormateada = fecha.toLocaleDateString('es-CL', {
+    const fecha = new Date(noticia.fecha_publicacion).toLocaleDateString('es-CL', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: 'numeric'
     });
-    
-    // Usar resumen ejecutivo si está disponible, sino usar extracto del contenido
-    const resumen = noticia.resumen_ejecutivo || 
-                   noticia.extracto_fuente || 
-                   noticia.cuerpo_completo?.substring(0, 200) + '...' || 
-                   'Resumen no disponible';
-    
-    // Mostrar título completo
-    const tituloCompleto = noticia.titulo || 'Sin título';
-    
-    // Determinar clase de relevancia
-    const relevancia = noticia.relevancia_juridica || 0;
-    const claseRelevancia = relevancia >= 4 ? 'alta-relevancia' : 
-                           relevancia >= 2 ? 'media-relevancia' : 'baja-relevancia';
-    
-    const elemento = document.createElement('article');
-    elemento.className = `noticia ${claseRelevancia}`;
-    elemento.innerHTML = `
-        <div class="noticia-header">
-            <div class="noticia-meta">
-                <span class="noticia-fuente">${noticia.fuente}</span>
-                <span class="noticia-fecha">${fechaFormateada}</span>
-                ${noticia.categoria ? `<span class="noticia-categoria">${noticia.categoria}</span>` : ''}
-                ${relevancia > 0 ? `<span class="noticia-relevancia">⭐ ${relevancia}</span>` : ''}
-            </div>
-            <h2 class="noticia-titulo">
-                <a href="${noticia.url_origen}" target="_blank" rel="noopener noreferrer">
-                    ${tituloCompleto}
-                </a>
-            </h2>
-        </div>
-        
-        <div class="noticia-contenido">
-            <div class="noticia-resumen">
-                <p>${resumen}</p>
-            </div>
-            
-            ${noticia.palabras_clave && noticia.palabras_clave.length > 0 ? `
-                <div class="noticia-etiquetas">
-                    ${noticia.palabras_clave.slice(0, 5).map(palabra => 
-                        `<span class="etiqueta">${palabra}</span>`
-                    ).join('')}
+
+    const fuenteDisplay = getFuenteDisplayName(noticia.fuente);
+    const categoriaDisplay = noticia.categoria || 'General';
+    const resumen = noticia.resumen_ejecutivo || 'Sin resumen disponible';
+
+    return `
+        <article class="noticia">
+            <div class="noticia-header">
+                <div class="noticia-meta">
+                    <span class="noticia-fuente">${fuenteDisplay}</span>
+                    <span class="noticia-fecha">
+                        <i class="far fa-calendar-alt"></i>
+                        ${fecha}
+                    </span>
+                    <span class="noticia-categoria">${categoriaDisplay}</span>
                 </div>
-            ` : ''}
-        </div>
-        
-        <div class="noticia-footer">
-            <a href="${noticia.url_origen}" target="_blank" rel="noopener noreferrer" class="btn-ver-mas">
-                <i class="fas fa-external-link-alt"></i>
-                Ver noticia completa
-            </a>
-            ${noticia.url_imagen ? `
-                <a href="${noticia.url_imagen}" target="_blank" class="btn-imagen">
-                    <i class="fas fa-image"></i>
-                    Ver imagen
-                </a>
-            ` : ''}
-        </div>
+                <h3 class="noticia-titulo">
+                    <a href="${noticia.url_origen}" target="_blank" rel="noopener noreferrer">
+                        ${noticia.titulo}
+                    </a>
+                </h3>
+            </div>
+            <div class="noticia-contenido">
+                <div class="noticia-resumen">
+                    <p>${resumen}</p>
+                </div>
+                <div class="noticia-footer">
+                    <a href="${noticia.url_origen}" target="_blank" rel="noopener noreferrer" class="btn-ver-mas">
+                        <i class="fas fa-external-link-alt"></i>
+                        Leer más
+                    </a>
+                </div>
+            </div>
+        </article>
     `;
-    
-    return elemento;
 }
 
+// Mostrar paginación
 function mostrarPaginacion() {
     const totalPaginas = Math.ceil(noticiasFiltradas.length / noticiasPorPagina);
     
@@ -288,39 +244,30 @@ function mostrarPaginacion() {
     paginacion.innerHTML = paginacionHTML;
 }
 
+// Cambiar página
 function cambiarPagina(pagina) {
     paginaActual = pagina;
     mostrarNoticias();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Actualizar estadísticas
 function actualizarEstadisticas() {
     const total = noticias.length;
     const filtradas = noticiasFiltradas.length;
     
-    estadisticas.innerHTML = `
-        <div class="estadisticas">
-            <span class="estadistica">
-                <i class="fas fa-newspaper"></i>
-                Total: ${total.toLocaleString()}
-            </span>
-            <span class="estadistica">
-                <i class="fas fa-filter"></i>
-                Mostrando: ${filtradas.toLocaleString()}
-            </span>
-            ${filtradas < total ? `
-                <span class="estadistica filtros-activos">
-                    <i class="fas fa-info-circle"></i>
-                    Filtros activos
-                </span>
-            ` : ''}
-        </div>
-    `;
+    if (totalNoticias) {
+        totalNoticias.textContent = filtradas;
+    }
+    if (ultimaActualizacion) {
+        ultimaActualizacion.textContent = `Última actualización: ${new Date().toLocaleTimeString('es-CL')}`;
+    }
 }
 
+// Mostrar/ocultar loading
 function mostrarLoading(mostrar) {
     if (mostrar) {
-        loadingSpinner.style.display = 'flex';
+        loadingSpinner.style.display = 'block';
         contenedorNoticias.style.opacity = '0.5';
     } else {
         loadingSpinner.style.display = 'none';
@@ -328,6 +275,7 @@ function mostrarLoading(mostrar) {
     }
 }
 
+// Mostrar error
 function mostrarError(mensaje) {
     contenedorNoticias.innerHTML = `
         <div class="error-mensaje">
@@ -342,33 +290,21 @@ function mostrarError(mensaje) {
     `;
 }
 
-// Función para actualizar filtros dinámicamente
-function actualizarFiltros() {
-    const fuentes = [...new Set(noticias.map(n => n.fuente))].sort();
-    const categorias = [...new Set(noticias.map(n => n.categoria).filter(Boolean))].sort();
-    
-    // Actualizar filtro de fuentes
-    filtroFuente.innerHTML = '<option value="todas">Todas las fuentes</option>';
-    fuentes.forEach(fuente => {
-        filtroFuente.innerHTML += `<option value="${fuente}">${fuente}</option>`;
-    });
-    
-    // Actualizar filtro de categorías
-    filtroCategoria.innerHTML = '<option value="todas">Todas las categorías</option>';
-    categorias.forEach(categoria => {
-        filtroCategoria.innerHTML += `<option value="${categoria}">${categoria}</option>`;
-    });
-}
-
-// Función para limpiar filtros
-function limpiarFiltros() {
-    filtroFuente.value = 'todas';
-    filtroCategoria.value = 'todas';
-    ordenSelect.value = 'fecha_desc';
-    buscador.value = '';
-    aplicarFiltros();
+// Obtener nombre de fuente para mostrar
+function getFuenteDisplayName(fuente) {
+    const fuentes = {
+        'poder_judicial': 'Poder Judicial',
+        'contraloria': 'Contraloría',
+        'tdpi': 'Tribunal de Propiedad Industrial',
+        'cde': 'Consejo de Defensa del Estado',
+        'tdlc': 'Tribunal de Defensa de la Libre Competencia',
+        'primer_tribunal_ambiental': 'Primer Tribunal Ambiental',
+        'tercer_tribunal_ambiental': 'Tercer Tribunal Ambiental',
+        'tribunal_ambiental': 'Tribunal Ambiental',
+        'ministerio_justicia': 'Ministerio de Justicia'
+    };
+    return fuentes[fuente] || fuente;
 }
 
 // Exportar funciones para uso global
-window.cambiarPagina = cambiarPagina;
-window.limpiarFiltros = limpiarFiltros; 
+window.cambiarPagina = cambiarPagina; 

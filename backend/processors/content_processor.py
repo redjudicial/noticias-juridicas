@@ -153,41 +153,56 @@ class ContentProcessor:
         Fuente: {fuente}
         Contenido: {contenido[:2000]}...
 
-        Genera un resumen ejecutivo estructurado con el siguiente formato:
+        Genera un resumen ejecutivo directo y práctico con el siguiente formato:
 
-        TÍTULO RESUMEN: [Título claro y descriptivo del resumen]
-        SUBTÍTULO: [Subtítulo explicativo]
-        RESUMEN: [Resumen ejecutivo de 2-3 párrafos máximo]
-        PUNTOS CLAVE:
-        - [Punto clave 1]
-        - [Punto clave 2]
-        - [Punto clave 3]
-        IMPLICACIONES: [Implicaciones jurídicas principales]
-        FUENTE: [Mantener la fuente original]
+        RESUMEN: [Un solo párrafo de máximo 200 palabras que explique directamente los hechos principales, sin frases introductorias como "esta noticia trata" o "se informa que". Ir directo al grano con los hechos más importantes]
+        PALABRAS_CLAVE: [3 palabras clave separadas por comas, sin espacios extras]
 
         El resumen debe ser:
+        - Directo y práctico (NO usar "esta noticia trata", "se informa que", etc.)
+        - Un solo párrafo completo (no cortado)
+        - Máximo 200 palabras
+        - Ir inmediatamente a los hechos principales
         - Claro y comprensible para abogados
         - Incluir información jurídica relevante
         - Mantener precisión legal
-        - Ser conciso pero completo
+        - NO cambiar el título original
+        - Nada de relleno, solo información esencial
+
+        Ejemplo de formato correcto:
+        "El presidente Boric inauguró la nueva cárcel de Rancagua con capacidad para 1,200 internos. La infraestructura incluye áreas de trabajo, educación y rehabilitación. El proyecto tuvo una inversión de $45 mil millones y reducirá el hacinamiento carcelario en la región."
+
+        Las palabras clave deben ser:
+        - 3 términos jurídicos relevantes
+        - Separadas por comas
+        - Sin espacios extras
         """
     
     def _parsear_respuesta_ia(self, respuesta: str, titulo: str, contenido: str, fuente: str) -> Dict[str, str]:
         """Parsear respuesta estructurada de IA"""
         try:
             # Extraer secciones usando regex
-            titulo_match = re.search(r'TÍTULO RESUMEN:\s*(.+)', respuesta, re.IGNORECASE | re.MULTILINE)
-            subtitulo_match = re.search(r'SUBTÍTULO:\s*(.+)', respuesta, re.IGNORECASE | re.MULTILINE)
-            resumen_match = re.search(r'RESUMEN:\s*(.+?)(?=\nPUNTOS CLAVE:|$)', respuesta, re.IGNORECASE | re.MULTILINE | re.DOTALL)
-            puntos_match = re.search(r'PUNTOS CLAVE:\s*(.+?)(?=\nIMPLICACIONES:|$)', respuesta, re.IGNORECASE | re.MULTILINE | re.DOTALL)
-            implicaciones_match = re.search(r'IMPLICACIONES:\s*(.+)', respuesta, re.IGNORECASE | re.MULTILINE)
+            resumen_match = re.search(r'RESUMEN:\s*(.+?)(?=\nPALABRAS_CLAVE:|$)', respuesta, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            palabras_match = re.search(r'PALABRAS_CLAVE:\s*(.+)', respuesta, re.IGNORECASE | re.MULTILINE)
+            
+            # Procesar palabras clave
+            palabras_clave = []
+            if palabras_match:
+                palabras_texto = palabras_match.group(1).strip()
+                palabras_clave = [palabra.strip() for palabra in palabras_texto.split(',') if palabra.strip()]
+                # Limitar a 3 palabras clave
+                palabras_clave = palabras_clave[:3]
+            
+            # Generar resumen
+            resumen_contenido = resumen_match.group(1).strip() if resumen_match else self._generar_resumen_basico(contenido)
             
             return {
-                'titulo_resumen': titulo_match.group(1).strip() if titulo_match else titulo,
-                'subtitulo': subtitulo_match.group(1).strip() if subtitulo_match else "",
-                'resumen_contenido': resumen_match.group(1).strip() if resumen_match else self._generar_resumen_basico(contenido),
-                'puntos_clave': self._extraer_puntos_clave(puntos_match.group(1) if puntos_match else ""),
-                'implicaciones_juridicas': implicaciones_match.group(1).strip() if implicaciones_match else "",
+                'titulo_resumen': titulo,  # Mantener título original
+                'subtitulo': "",
+                'resumen_contenido': resumen_contenido,
+                'puntos_clave': [],
+                'implicaciones_juridicas': "",
+                'palabras_clave': palabras_clave,
                 'fuente': fuente
             }
             
@@ -202,20 +217,30 @@ class ContentProcessor:
         fecha = self._extraer_fecha(contenido)
         tribunal = self._extraer_tribunal(contenido)
         
-        # Generar resumen básico
-        resumen = f"Noticia de {fuente} sobre {titulo.lower()}"
+        # Generar resumen básico directo
+        resumen = titulo
         if tribunal:
             resumen += f" del {tribunal}"
         if fecha:
             resumen += f" con fecha {fecha}"
-        resumen += "."
+        resumen += ". "
+        
+        # Agregar información adicional del contenido si está disponible
+        if len(contenido) > 50:
+            # Tomar las primeras 150 palabras del contenido para complementar
+            palabras_adicionales = contenido.split()[:150]
+            contenido_adicional = ' '.join(palabras_adicionales)
+            resumen += contenido_adicional.strip()
+            if not resumen.endswith('.'):
+                resumen += '.'
         
         return {
             'titulo_resumen': titulo,
-            'subtitulo': f"Información de {fuente}",
+            'subtitulo': "",
             'resumen_contenido': resumen,
-            'puntos_clave': palabras_clave[:3],
-            'implicaciones_juridicas': "Información jurídica relevante",
+            'puntos_clave': [],
+            'implicaciones_juridicas': "",
+            'palabras_clave': palabras_clave[:3],
             'fuente': fuente
         }
     
