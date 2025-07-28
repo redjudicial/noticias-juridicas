@@ -170,12 +170,13 @@ class NoticiasJuridicasSystem:
     def _insertar_noticia(self, noticia) -> Dict:
         """Insertar nueva noticia en Supabase"""
         try:
-            # Generar resumen jurídico
-            resumen = self.content_processor.generate_resumen_juridico(noticia)
+            # Generar resumen ejecutivo
+            resumen = self.content_processor.generar_resumen_ejecutivo(noticia.titulo, noticia.cuerpo_completo, noticia.fuente)
             
             # Preparar datos para inserción
             datos_noticia = noticia.to_dict()
             datos_noticia['resumen_ejecutivo'] = resumen.get('resumen_contenido', '')
+            datos_noticia['palabras_clave'] = resumen.get('palabras_clave', [])
             
             # Insertar noticia
             noticia_id = self.supabase.insert_noticia(datos_noticia)
@@ -185,7 +186,7 @@ class NoticiasJuridicasSystem:
                 datos_resumen = {
                     'noticia_id': noticia_id,
                     'titulo_resumen': resumen.get('titulo_resumen', ''),
-                    'subtitulo_resumen': resumen.get('subtitulo_resumen', ''),
+                    'subtitulo_resumen': resumen.get('subtitulo', ''),
                     'resumen_contenido': resumen.get('resumen_contenido', ''),
                     'puntos_clave': resumen.get('puntos_clave', []),
                     'implicaciones_juridicas': resumen.get('implicaciones_juridicas', ''),
@@ -207,11 +208,12 @@ class NoticiasJuridicasSystem:
         """Actualizar noticia existente"""
         try:
             # Generar nuevo resumen
-            resumen = self.content_processor.generate_resumen_juridico(noticia)
+            resumen = self.content_processor.generar_resumen_ejecutivo(noticia.titulo, noticia.cuerpo_completo, noticia.fuente)
             
             # Actualizar datos
             datos_actualizacion = noticia.to_dict()
             datos_actualizacion['resumen_ejecutivo'] = resumen.get('resumen_contenido', '')
+            datos_actualizacion['palabras_clave'] = resumen.get('palabras_clave', [])
             datos_actualizacion['es_actualizacion'] = True
             datos_actualizacion['version'] = 2  # Incrementar versión
             
@@ -221,7 +223,7 @@ class NoticiasJuridicasSystem:
             datos_resumen = {
                 'noticia_id': noticia_id,
                 'titulo_resumen': resumen.get('titulo_resumen', ''),
-                'subtitulo_resumen': resumen.get('subtitulo_resumen', ''),
+                'subtitulo_resumen': resumen.get('subtitulo', ''),
                 'resumen_contenido': resumen.get('resumen_contenido', ''),
                 'puntos_clave': resumen.get('puntos_clave', []),
                 'implicaciones_juridicas': resumen.get('implicaciones_juridicas', ''),
