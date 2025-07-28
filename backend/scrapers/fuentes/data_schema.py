@@ -414,3 +414,51 @@ class DataNormalizer:
                 titulo += '.'
         
         return titulo 
+
+def crear_noticia_estandarizada(
+    titulo: str,
+    cuerpo_completo: str,
+    fecha_publicacion: datetime,
+    fuente: str,
+    url_origen: str,
+    categoria: Categoria = Categoria.OTRO,
+    jurisdiccion: Jurisdiccion = Jurisdiccion.NACIONAL,
+    tipo_documento: TipoDocumento = TipoDocumento.NOTICIA,
+    **kwargs
+) -> NoticiaEstandarizada:
+    """
+    Función helper para crear una NoticiaEstandarizada con valores por defecto
+    
+    Args:
+        titulo: Título de la noticia
+        cuerpo_completo: Contenido completo de la noticia
+        fecha_publicacion: Fecha de publicación
+        fuente: Nombre de la fuente
+        url_origen: URL de origen
+        categoria: Categoría de la noticia
+        jurisdiccion: Jurisdicción
+        tipo_documento: Tipo de documento
+        **kwargs: Argumentos adicionales para campos opcionales
+    
+    Returns:
+        NoticiaEstandarizada: Instancia de noticia estandarizada
+    """
+    # Extraer metadata del contenido
+    metadata = DataNormalizer.extraer_metadata_avanzada(cuerpo_completo, url_origen)
+    
+    # Limpiar título
+    titulo_limpio = DataNormalizer.limpiar_titulo(titulo)
+    
+    # Crear la noticia estandarizada
+    return NoticiaEstandarizada(
+        titulo=titulo_limpio,
+        cuerpo_completo=cuerpo_completo,
+        fecha_publicacion=fecha_publicacion,
+        fuente=fuente,
+        url_origen=url_origen,
+        categoria=categoria,
+        jurisdiccion=jurisdiccion,
+        tipo_documento=tipo_documento,
+        metadata=metadata,
+        **kwargs
+    ) 
