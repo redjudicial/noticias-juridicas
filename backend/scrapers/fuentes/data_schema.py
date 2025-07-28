@@ -461,4 +461,69 @@ def crear_noticia_estandarizada(
         tipo_documento=tipo_documento,
         metadata=metadata,
         **kwargs
-    ) 
+    )
+
+def validar_noticia_estandarizada(noticia: NoticiaEstandarizada) -> bool:
+    """
+    Validar que una noticia estandarizada tenga todos los campos requeridos
+    
+    Args:
+        noticia: Instancia de NoticiaEstandarizada a validar
+    
+    Returns:
+        bool: True si la noticia es válida, False en caso contrario
+    """
+    try:
+        # Validar campos requeridos
+        if not noticia.titulo or not noticia.titulo.strip():
+            print("❌ Error: Título vacío o nulo")
+            return False
+        
+        if not noticia.cuerpo_completo or not noticia.cuerpo_completo.strip():
+            print("❌ Error: Cuerpo completo vacío o nulo")
+            return False
+        
+        if not noticia.fecha_publicacion:
+            print("❌ Error: Fecha de publicación nula")
+            return False
+        
+        if not noticia.fuente or not noticia.fuente.strip():
+            print("❌ Error: Fuente vacía o nula")
+            return False
+        
+        if not noticia.url_origen or not noticia.url_origen.strip():
+            print("❌ Error: URL de origen vacía o nula")
+            return False
+        
+        # Validar que la URL sea válida
+        if not noticia.url_origen.startswith(('http://', 'https://')):
+            print("❌ Error: URL de origen no válida")
+            return False
+        
+        # Validar longitud mínima del contenido
+        if len(noticia.cuerpo_completo.strip()) < 50:
+            print("❌ Error: Contenido demasiado corto (mínimo 50 caracteres)")
+            return False
+        
+        # Validar que el título no sea demasiado largo
+        if len(noticia.titulo.strip()) > 500:
+            print("❌ Error: Título demasiado largo (máximo 500 caracteres)")
+            return False
+        
+        # Validar que la fecha no sea futura (con margen de 1 día)
+        from datetime import timedelta
+        if noticia.fecha_publicacion > datetime.now(timezone.utc) + timedelta(days=1):
+            print("❌ Error: Fecha de publicación en el futuro")
+            return False
+        
+        # Validar que la fecha no sea muy antigua (más de 10 años)
+        if noticia.fecha_publicacion < datetime.now(timezone.utc) - timedelta(days=3650):
+            print("❌ Error: Fecha de publicación muy antigua")
+            return False
+        
+        print("✅ Noticia válida")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error validando noticia: {e}")
+        return False 
