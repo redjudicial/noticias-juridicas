@@ -43,6 +43,9 @@ async function cargarNoticias() {
         noticias = await response.json();
         noticiasFiltradas = [...noticias];
         
+        // Aplicar ordenamiento por defecto (más recientes primero)
+        aplicarOrdenamiento();
+        
         actualizarEstadisticas();
         mostrarNoticias();
         

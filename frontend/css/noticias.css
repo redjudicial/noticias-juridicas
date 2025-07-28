@@ -189,11 +189,22 @@ body {
 
 .buscador-grupo input {
     width: 100%;
-    padding-left: 2.5rem;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: var(--bg-white);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23666'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: 12px center;
     background-size: 18px;
+    transition: var(--transition);
+}
+
+.buscador-grupo input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
 /* Estadísticas */
@@ -237,6 +248,29 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Estado sin noticias */
+.no-noticias {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.no-noticias i {
+    font-size: 3rem;
+    color: var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.no-noticias h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.no-noticias p {
+    margin: 0;
+    font-size: 0.95rem;
 }
 
 /* Contenedor de noticias */
@@ -308,6 +342,18 @@ body {
     color: var(--text-primary);
     line-height: 1.4;
     margin-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+.noticia-titulo a {
+    color: inherit;
+    text-decoration: none;
+    transition: var(--transition);
+    display: block;
+}
+
+.noticia-titulo a:hover {
+    color: var(--accent-color);
 }
 
 .noticia-titulo a {
@@ -332,10 +378,13 @@ body {
 
 .noticia-resumen p {
     margin: 0;
+    line-height: 1.6;
+    color: var(--text-secondary);
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .noticia-etiquetas {
