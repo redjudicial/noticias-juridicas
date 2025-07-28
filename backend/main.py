@@ -30,7 +30,11 @@ from backend.scrapers.fuentes import (
     TDLScraper,
     PrimerTribunalAmbientalScraper,
     TercerTribunalAmbientalScraper,
-    TribunalAmbientalScraper
+    TribunalAmbientalScraper,
+    SIIScraper,
+    TTAScraper,
+    INAPIScraper,
+    DTScraper
 )
 
 class NoticiasJuridicasSystem:
@@ -71,6 +75,18 @@ class NoticiasJuridicasSystem:
                 openai_api_key=self.config.get('openai_api_key')
             ),
             'tribunal_ambiental': TribunalAmbientalScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'sii': SIIScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'tta': TTAScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'inapi': INAPIScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'dt': DTScraper(
                 openai_api_key=self.config.get('openai_api_key')
             )
         }

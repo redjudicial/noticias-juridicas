@@ -189,6 +189,83 @@ TRIBUNAL_AMBIENTAL_GENERAL_CONFIG = {
     'prefijo': '(2º)'
 }
 
+# Servicio de Impuestos Internos
+SII_CONFIG = {
+    'nombre': 'SII',
+    'codigo': 'sii',
+    'url_base': 'https://www.sii.cl',
+    'url_noticias': 'https://www.sii.cl/noticias/2025/index.html',
+    'activo': True,
+    'prioridad': 3,
+    'palabras_clave': [
+        'impuesto', 'tributario', 'fiscal', 'iva', 'renta', 'contribuyente',
+        'declaración', 'formulario', 'sii', 'servicio impuestos internos',
+        'código tributario', 'evasión', 'fiscalización'
+    ],
+    'exclusiones': [
+        'menú', 'inicio', 'buscar', 'rss', 'formularios', 'trámites'
+    ],
+    'categoria': 'NORMATIVA',
+    'jurisdiccion': 'NACIONAL'
+}
+
+# Tribunales Tributarios y Aduaneros
+TTA_CONFIG = {
+    'nombre': 'TTA',
+    'codigo': 'tta',
+    'url_base': 'https://www.tta.cl',
+    'url_noticias': 'https://www.tta.cl/noticias/',
+    'activo': True,
+    'prioridad': 3,
+    'palabras_clave': [
+        'tribunal', 'tributario', 'aduanero', 'impuesto', 'fiscal',
+        'tta', 'reclamación', 'resolución', 'aduana'
+    ],
+    'exclusiones': [
+        'menú', 'inicio', 'buscar', 'rss', 'formularios'
+    ],
+    'categoria': 'TRIBUNAL',
+    'jurisdiccion': 'NACIONAL'
+}
+
+# Instituto Nacional de Propiedad Industrial
+INAPI_CONFIG = {
+    'nombre': 'INAPI',
+    'codigo': 'inapi',
+    'url_base': 'https://www.inapi.cl',
+    'url_noticias': 'https://www.inapi.cl/sala-de-prensa/noticias',
+    'activo': True,
+    'prioridad': 3,
+    'palabras_clave': [
+        'propiedad industrial', 'patente', 'marca', 'diseño',
+        'inapi', 'registro', 'invención', 'innovación'
+    ],
+    'exclusiones': [
+        'menú', 'inicio', 'buscar', 'rss', 'formularios', 'trámites'
+    ],
+    'categoria': 'NORMATIVA',
+    'jurisdiccion': 'NACIONAL'
+}
+
+# Dirección del Trabajo
+DT_CONFIG = {
+    'nombre': 'DT',
+    'codigo': 'dt',
+    'url_base': 'https://www.dt.gob.cl',
+    'url_noticias': 'https://www.dt.gob.cl/portal/1627/w3-propertyvalue-191853.html',
+    'activo': True,
+    'prioridad': 3,
+    'palabras_clave': [
+        'trabajo', 'laboral', 'empleador', 'trabajador',
+        'inspección', 'fiscalización', 'sindicato', 'contrato'
+    ],
+    'exclusiones': [
+        'menú', 'inicio', 'buscar', 'rss', 'formularios', 'trámites'
+    ],
+    'categoria': 'NORMATIVA',
+    'jurisdiccion': 'NACIONAL'
+}
+
 # ========================================
 # CONFIGURACIÓN DE TODAS LAS FUENTES
 # ========================================
@@ -202,7 +279,11 @@ FUENTES_CONFIG = {
     'tdlc': TDLC_CONFIG,
     '1ta': TRIBUNAL_AMBIENTAL_1TA_CONFIG,
     '3ta': TRIBUNAL_AMBIENTAL_3TA_CONFIG,
-    'tribunal_ambiental': TRIBUNAL_AMBIENTAL_GENERAL_CONFIG
+    'tribunal_ambiental': TRIBUNAL_AMBIENTAL_GENERAL_CONFIG,
+    'sii': SII_CONFIG,
+    'tta': TTA_CONFIG,
+    'inapi': INAPI_CONFIG,
+    'dt': DT_CONFIG
 }
 
 # ========================================

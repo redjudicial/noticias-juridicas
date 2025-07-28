@@ -294,7 +294,11 @@ function getFuenteDisplayName(fuente) {
         '1ta': 'Tribunal Ambiental',
         '3ta': 'Tribunal Ambiental',
         'tribunal_ambiental': 'Tribunal Ambiental',
-        'ministerio_justicia': 'Ministerio de Justicia'
+        'ministerio_justicia': 'Ministerio de Justicia',
+        'sii': 'SII',
+        'tta': 'TTA',
+        'inapi': 'INAPI',
+        'dt': 'DT'
     };
     return fuentes[fuente] || fuente;
 }

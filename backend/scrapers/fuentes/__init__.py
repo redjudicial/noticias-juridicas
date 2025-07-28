@@ -51,6 +51,10 @@ from .tdlc import TDLScraper
 from .primer_tribunal_ambiental import PrimerTribunalAmbientalScraper
 from .tercer_tribunal_ambiental import TercerTribunalAmbientalScraper
 from .tribunal_ambiental import TribunalAmbientalScraper
+from .sii import SIIScraper
+from .tta import TTAScraper
+from .inapi import INAPIScraper
+from .dt import DTScraper
 
 # Diccionario de scrapers disponibles
 SCRAPERS_DISPONIBLES = {
@@ -63,7 +67,11 @@ SCRAPERS_DISPONIBLES = {
     'tdlc': TDLScraper,
     '1ta': PrimerTribunalAmbientalScraper,
     '3ta': TercerTribunalAmbientalScraper,
-    'tribunal_ambiental': TribunalAmbientalScraper
+    'tribunal_ambiental': TribunalAmbientalScraper,
+    'sii': SIIScraper,
+    'tta': TTAScraper,
+    'inapi': INAPIScraper,
+    'dt': DTScraper
 }
 
 def get_scraper(fuente: str):
