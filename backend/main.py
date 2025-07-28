@@ -146,8 +146,8 @@ class NoticiasJuridicasSystem:
     
     def _procesar_noticia(self, noticia) -> Dict:
         """Procesar una noticia individual"""
-        # Verificar si ya existe
-        noticia_existente = self.supabase.get_noticia_by_hash(noticia.generate_hash())
+        # Verificar duplicados por URL (más confiable que hash)
+        noticia_existente = self.supabase.get_noticia_by_url(noticia.url_origen)
         
         if noticia_existente:
             # Verificar si necesita actualización
@@ -162,7 +162,11 @@ class NoticiasJuridicasSystem:
     def _necesita_actualizacion(self, noticia_existente: Dict, noticia_nueva) -> bool:
         """Verificar si una noticia necesita actualización"""
         # Comparar fechas de actualización
-        fecha_existente = datetime.fromisoformat(noticia_existente['fecha_actualizacion'].replace('Z', '+00:00'))
+        fecha_actualizacion = noticia_existente.get('fecha_actualizacion')
+        if fecha_actualizacion:
+            fecha_existente = datetime.fromisoformat(fecha_actualizacion.replace('Z', '+00:00'))
+        else:
+            fecha_existente = datetime.fromisoformat(noticia_existente['fecha_publicacion'].replace('Z', '+00:00'))
         fecha_nueva = noticia_nueva.fecha_actualizacion or noticia_nueva.fecha_publicacion
         
         return fecha_nueva > fecha_existente
@@ -174,29 +178,24 @@ class NoticiasJuridicasSystem:
             resumen = self.content_processor.generar_resumen_ejecutivo(noticia.titulo, noticia.cuerpo_completo, noticia.fuente)
             
             # Preparar datos para inserción
-            datos_noticia = noticia.to_dict()
+            if hasattr(noticia, 'to_dict'):
+                datos_noticia = noticia.to_dict()
+            else:
+                # Si ya es un diccionario, usarlo directamente
+                datos_noticia = noticia
+            
+            # Agregar resumen ejecutivo y palabras clave
             datos_noticia['resumen_ejecutivo'] = resumen.get('resumen_contenido', '')
             datos_noticia['palabras_clave'] = resumen.get('palabras_clave', [])
+            
+            # Asegurar que los campos requeridos estén presentes
+            if 'autor' not in datos_noticia or datos_noticia['autor'] is None:
+                datos_noticia['autor'] = None
             
             # Insertar noticia
             noticia_id = self.supabase.insert_noticia(datos_noticia)
             
             if noticia_id:
-                # Insertar resumen
-                datos_resumen = {
-                    'noticia_id': noticia_id,
-                    'titulo_resumen': resumen.get('titulo_resumen', ''),
-                    'subtitulo_resumen': resumen.get('subtitulo', ''),
-                    'resumen_contenido': resumen.get('resumen_contenido', ''),
-                    'puntos_clave': resumen.get('puntos_clave', []),
-                    'implicaciones_juridicas': resumen.get('implicaciones_juridicas', ''),
-                    'tipo_resumen': 'ejecutivo',
-                    'nivel_tecnico': 'intermedio',
-                    'modelo_ia': 'gpt-4'
-                }
-                
-                self.supabase.insert_resumen(datos_resumen)
-                
                 print(f"✅ Nueva noticia insertada: {noticia.titulo[:50]}...")
                 return {'tipo': 'nueva', 'id': noticia_id}
             

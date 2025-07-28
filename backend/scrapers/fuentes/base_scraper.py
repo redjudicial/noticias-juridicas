@@ -286,28 +286,31 @@ class BaseScraper(ABC):
         return validar_noticia_estandarizada(noticia)
     
     def _normalizar_datos(self, datos_raw: Dict) -> Dict:
-        """Normalizar datos raw a formato estándar"""
-        datos_normalizados = {}
+        """Normalizar datos raw - método común"""
+        normalizer = DataNormalizer()
+        return normalizer.normalizar_noticia(datos_raw)
+    
+    def generate_hash(self, texto: str) -> str:
+        """Generar hash único para un texto - método común"""
+        import hashlib
+        return hashlib.md5(texto.encode('utf-8')).hexdigest()
+    
+    def extraer_palabras_clave(self, texto: str) -> List[str]:
+        """Extraer palabras clave del texto - método común"""
+        if not texto:
+            return []
         
-        # Normalizar título
-        if 'titulo' in datos_raw:
-            datos_normalizados['titulo'] = DataNormalizer.normalize_titulo(datos_raw['titulo'])
+        # Palabras comunes a excluir
+        stop_words = {
+            'el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 'da', 'su', 'por', 'son', 'con', 'para', 'al', 'del', 'los', 'las', 'una', 'como', 'pero', 'sus', 'me', 'hasta', 'hay', 'donde', 'han', 'quien', 'están', 'estado', 'desde', 'todo', 'nos', 'durante', 'todos', 'uno', 'les', 'ni', 'contra', 'otros', 'ese', 'eso', 'ante', 'ellos', 'e', 'esto', 'mí', 'antes', 'algunos', 'qué', 'unos', 'yo', 'otro', 'otras', 'otra', 'él', 'tanto', 'esa', 'estos', 'mucho', 'quienes', 'nada', 'muchos', 'cual', 'poco', 'ella', 'estar', 'estas', 'algunas', 'algo', 'nosotros'
+        }
         
-        # Normalizar categoría
-        if 'categoria' in datos_raw:
-            datos_normalizados['categoria'] = DataNormalizer.normalize_categoria(datos_raw['categoria'])
+        # Limpiar y tokenizar
+        palabras = re.findall(r'\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]{3,}\b', texto.lower())
         
-        # Normalizar jurisdicción
-        if 'jurisdiccion' in datos_raw:
-            datos_normalizados['jurisdiccion'] = DataNormalizer.normalize_jurisdiccion(datos_raw['jurisdiccion'])
+        # Filtrar stop words y palabras muy cortas
+        palabras_clave = [palabra for palabra in palabras if palabra not in stop_words and len(palabra) > 2]
         
-        # Normalizar tipo de documento
-        if 'tipo_documento' in datos_raw:
-            datos_normalizados['tipo_documento'] = DataNormalizer.normalize_tipo_documento(datos_raw['tipo_documento'])
-        
-        # Copiar otros campos
-        for key, value in datos_raw.items():
-            if key not in ['titulo', 'categoria', 'jurisdiccion', 'tipo_documento']:
-                datos_normalizados[key] = value
-        
-        return datos_normalizados 
+        # Retornar las 10 palabras más frecuentes
+        from collections import Counter
+        return [palabra for palabra, _ in Counter(palabras_clave).most_common(10)] 

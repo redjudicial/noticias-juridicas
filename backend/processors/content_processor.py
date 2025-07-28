@@ -101,7 +101,8 @@ class ContentProcessor:
     """Procesador de contenido para noticias jurídicas"""
     
     def __init__(self, openai_api_key: str = None):
-        self.openai_api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
+        self.openai_api_key = openai_api_key
+        self.resumen_cache = {}  # Cache para evitar llamadas repetidas or os.getenv('OPENAI_API_KEY')
         if self.openai_api_key:
             openai.api_key = self.openai_api_key
     
@@ -117,34 +118,47 @@ class ContentProcessor:
             titulo_limpio = self._limpiar_titulo(titulo)
             contenido_limpio = self._limpiar_contenido(contenido)
             
+            # Verificar cache
+            cache_key = f"{titulo_limpio[:100]}_{fuente}"
+            if cache_key in self.resumen_cache:
+                return self.resumen_cache[cache_key]
+            
             if not self.openai_api_key:
                 return self._generar_resumen_manual(titulo_limpio, contenido_limpio, fuente)
             
             # Preparar prompt para IA
             prompt = self._crear_prompt_resumen(titulo_limpio, contenido_limpio, fuente)
             
-            # Llamar a OpenAI
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            # Llamar a OpenAI con la nueva API
+            from openai import OpenAI
+            client = OpenAI(api_key=self.openai_api_key)
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
                 messages=[
                     {
                         "role": "system",
-                        "content": "Eres un experto en derecho chileno. Tu tarea es crear resúmenes ejecutivos claros y precisos de noticias jurídicas."
+                        "content": "Eres un experto en derecho chileno. Crea resúmenes ejecutivos cortos y precisos."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=800,
-                temperature=0.3
+                max_tokens=300,
+                temperature=0.2
             )
             
             # Procesar respuesta
             respuesta_ia = response.choices[0].message.content
             
             # Parsear la respuesta estructurada
-            return self._parsear_respuesta_ia(respuesta_ia, titulo_limpio, contenido_limpio, fuente)
+            resultado = self._parsear_respuesta_ia(respuesta_ia, titulo_limpio, contenido_limpio, fuente)
+            
+            # Guardar en cache
+            self.resumen_cache[cache_key] = resultado
+            
+            return resultado
             
         except Exception as e:
             print(f"❌ Error generando resumen con IA: {str(e)}")
@@ -155,31 +169,15 @@ class ContentProcessor:
         return f"""
         Título: {titulo}
         Fuente: {fuente}
-        Contenido: {contenido[:2000]}...
+        Contenido: {contenido[:800]}...
 
-        Genera un resumen ejecutivo directo y práctico con el siguiente formato:
+        RESUMEN: [Máximo 80 palabras. Solo hechos principales]
+        PALABRAS_CLAVE: [3 términos jurídicos separados por comas]
 
-        RESUMEN: [Un solo párrafo de máximo 200 palabras que explique directamente los hechos principales, sin frases introductorias como "esta noticia trata" o "se informa que". Ir directo al grano con los hechos más importantes]
-        PALABRAS_CLAVE: [3 palabras clave separadas por comas, sin espacios extras]
-
-        El resumen debe ser:
-        - Directo y práctico (NO usar "esta noticia trata", "se informa que", etc.)
-        - Un solo párrafo completo (no cortado)
-        - Máximo 200 palabras
-        - Ir inmediatamente a los hechos principales
-        - Claro y comprensible para abogados
-        - Incluir información jurídica relevante
-        - Mantener precisión legal
-        - NO cambiar el título original
-        - Nada de relleno, solo información esencial
-
-        Ejemplo de formato correcto:
-        "El presidente Boric inauguró la nueva cárcel de Rancagua con capacidad para 1,200 internos. La infraestructura incluye áreas de trabajo, educación y rehabilitación. El proyecto tuvo una inversión de $45 mil millones y reducirá el hacinamiento carcelario en la región."
-
-        Las palabras clave deben ser:
-        - 3 términos jurídicos relevantes
-        - Separadas por comas
-        - Sin espacios extras
+        REGLAS:
+        - Máximo 80 palabras
+        - Solo información esencial
+        - Sin introducciones
         """
     
     def _parsear_respuesta_ia(self, respuesta: str, titulo: str, contenido: str, fuente: str) -> Dict[str, str]:
@@ -272,8 +270,12 @@ class ContentProcessor:
     
     def _limpiar_contenido(self, contenido: str) -> str:
         """Limpiar contenido de información irrelevante"""
+        if not contenido:
+            return ""
+        
         # Patrones a eliminar
         patrones_a_eliminar = [
+            # Información del Poder Judicial
             r'Poder Judicial Radio.*?Compartir',
             r'Los horarios de atención son.*?horas\.',
             r'Atención por teléfonos.*?\d+',
@@ -281,17 +283,59 @@ class ContentProcessor:
             r'Prensa y Comunicaciones.*?Proyectos de Ley',
             r'Consulta Ciudadana.*?Sistema de traducción',
             r'Canal preferencial.*?creole\.',
+            
+            # Fechas y horas
             r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}',  # Fechas con hora
             r'\d{2}:\d{2}',  # Horas sueltas
+            
+            # Elementos de navegación
             r'Compartir\s+Compartir',
             r'Compartir\s*',  # Solo "Compartir"
             r'×\s*',  # Símbolos de multiplicación
+            r'Volver\s*',  # "Volver"
+            r'Cerrar\s*',  # "Cerrar"
+            
+            # Portales y sistemas
             r'Portal Unificado de Sentencias.*?Compartir',
             r'Fiscalía.*?Compartir',
             r'Corte de Apelaciones.*?Compartir',
             r'Corte Suprema.*?Compartir',
             r'TOP.*?Compartir',
             r'Juzgado.*?Compartir',
+            
+            # Información de contacto y navegación
+            r'Please ensure Javascript is enabled for purposes of website accessibility',
+            r'Sistema de traducción en línea.*?\d+',
+            r'Atención por Chat Messenger',
+            r'Portal Unificado de Sentencias en línea',
+            r'Orientación e información digital',
+            r'Plataformas digitales destinadas a orientar.*?usuarios',
+            r'Canal preferencial para personas en situación de discapacidad',
+            r'Traducción automática.*?creole',
+            
+            # Números de teléfono y contacto
+            r'\d{6,}',  # Números largos (teléfonos)
+            r'Teléfono.*?\d+',
+            r'Contacto.*?\d+',
+            
+            # Enlaces y URLs
+            r'https?://[^\s]+',
+            r'www\.[^\s]+',
+            
+            # Información de navegación
+            r'Tabla Primera Sala',
+            r'Tabla Segunda Sala',
+            r'Compendio Tercera Sala Corte Suprema',
+            r'Muestra representativa de sentencias.*?alto volumen',
+            r'Materias a consultar.*?licencias médicas',
+            r'Buscador Unificado de Sentencias',
+            r'Contiene una.*?sentencias',
+            
+            # Información administrativa
+            r'Los horarios de atención.*?horas',
+            r'Horario de atención.*?horas',
+            r'Días hábiles.*?viernes',
+            r'Lunes a viernes.*?horas',
         ]
         
         contenido_limpio = contenido
@@ -304,17 +348,124 @@ class ContentProcessor:
         contenido_limpio = re.sub(r'\s+', ' ', contenido_limpio)
         contenido_limpio = re.sub(r'\n\s*\n', '\n', contenido_limpio)
         
-        return contenido_limpio.strip()
+        # Eliminar líneas que solo contengan espacios o caracteres especiales
+        lineas = contenido_limpio.split('\n')
+        lineas_limpias = []
+        for linea in lineas:
+            linea_limpia = linea.strip()
+            if linea_limpia and len(linea_limpia) > 3:  # Al menos 3 caracteres
+                # Verificar que no sea solo caracteres especiales
+                if re.search(r'[a-zA-ZáéíóúñÁÉÍÓÚÑ]', linea_limpia):
+                    lineas_limpias.append(linea_limpia)
+        
+        contenido_limpio = '\n'.join(lineas_limpias)
+        
+        # Limpiar espacios al inicio y final
+        contenido_limpio = contenido_limpio.strip()
+        
+        return contenido_limpio
     
     def _limpiar_titulo(self, titulo: str) -> str:
-        """Limpiar título de fechas y horas"""
-        # Eliminar fechas y horas del título
-        titulo_limpio = re.sub(r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}', '', titulo)
-        titulo_limpio = re.sub(r'\d{2}:\d{2}', '', titulo_limpio)
-        titulo_limpio = re.sub(r'\d{2}-\d{2}-\d{4}', '', titulo_limpio)  # Solo fecha
-        titulo_limpio = re.sub(r'\s+', ' ', titulo_limpio).strip()
+        """Limpiar título de fechas, horas y información duplicada"""
+        if not titulo:
+            return ""
+        
+        titulo_limpio = titulo
+        
+        # Eliminar fechas y horas del título (más agresivo)
+        patrones_fecha_hora = [
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}',  # DD-MM-YYYY HH:MM
+            r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}',  # DD/MM/YYYY HH:MM
+            r'\d{2}:\d{2}',  # Solo hora
+            r'\d{2}-\d{2}-\d{4}',  # Solo fecha DD-MM-YYYY
+            r'\d{2}/\d{2}/\d{4}',  # Solo fecha DD/MM/YYYY
+            r'\d{4}-\d{2}-\d{2}',  # Solo fecha YYYY-MM-DD
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}',  # D-M-YYYY H:MM
+            r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}',  # D/M/YYYY H:MM
+            r'\d{1,2}-\d{1,2}-\d{4}',  # D-M-YYYY
+            r'\d{1,2}/\d{1,2}/\d{4}',  # D/M/YYYY
+            # Patrones específicos del Poder Judicial
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s*$',  # Fecha y hora al final
+            r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}\s*$',  # Fecha y hora al final
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}\s*$',  # Fecha y hora al final
+            r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s*$',  # Fecha y hora al final
+            # Patrones específicos para el ejemplo dado
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}$',  # 26-07-2025 04:07
+            r'\d{2}-\d{2}-\d{4}\s+\d{1,2}:\d{2}$',  # 26-07-2025 4:07
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{2}:\d{2}$',  # 6-07-2025 04:07
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}$',  # 6-7-2025 4:07
+        ]
+        
+        for patron in patrones_fecha_hora:
+            titulo_limpio = re.sub(patron, '', titulo_limpio)
+        
+        # Eliminar información duplicada y irrelevante
+        patrones_duplicados = [
+            r'\s+del\s+Corte\s+de\s+Apelaciones\.?\s*$',  # "del Corte de Apelaciones" al final
+            r'\s+del\s+Fiscalía\.?\s*$',  # "del Fiscalía" al final
+            r'\s+del\s+Corte\s+Suprema\.?\s*$',  # "del Corte Suprema" al final
+            r'\s+del\s+TOP\.?\s*$',  # "del TOP" al final
+            r'\s+del\s+Juzgado\.?\s*$',  # "del Juzgado" al final
+            r'\s+Video\s*$',  # "Video" al final
+            r'\s+Compartir\s*$',  # "Compartir" al final
+            r'\s+×\s*$',  # Símbolo de multiplicación al final
+            r'\s+Portal\s+Unificado\s+de\s+Sentencias\s*$',  # "Portal Unificado de Sentencias" al final
+            r'\s+Poder\s+Judicial\s+Radio\s*$',  # "Poder Judicial Radio" al final
+            r'\s+Poder\s+Judicial\s+TV\s*$',  # "Poder Judicial TV" al final
+            r'\s+Orientación\s+e\s+información\s+digital\s*$',  # "Orientación e información digital" al final
+            r'\s+Plataformas\s+digitales\s*$',  # "Plataformas digitales" al final
+            r'\s+Atención\s+por\s+Chat\s*$',  # "Atención por Chat" al final
+            r'\s+Sistema\s+de\s+traducción\s*$',  # "Sistema de traducción" al final
+            r'\s+\d{6,}\s*$',  # Números largos al final (teléfonos)
+            r'\s+creole\.\s*$',  # "creole." al final
+            r'\s+Volver\s*$',  # "Volver" al final
+            r'\s+Please\s+ensure\s+Javascript\s+is\s+enabled\s*$',  # "Please ensure Javascript is enabled" al final
+            r'\s+Cerrar\s*$',  # "Cerrar" al final
+        ]
+        
+        for patron in patrones_duplicados:
+            titulo_limpio = re.sub(patron, '', titulo_limpio, flags=re.IGNORECASE)
+        
+        # Eliminar repeticiones del mismo título
+        # Si el título se repite más de una vez, tomar solo la primera parte
+        palabras = titulo_limpio.split()
+        if len(palabras) > 10:
+            # Buscar patrones de repetición
+            mitad = len(palabras) // 2
+            primera_mitad = ' '.join(palabras[:mitad])
+            segunda_mitad = ' '.join(palabras[mitad:])
+            
+            # Si la segunda mitad es muy similar a la primera, eliminar la repetición
+            if self._similitud_texto(primera_mitad, segunda_mitad) > 0.7:
+                titulo_limpio = primera_mitad
+        
+        # Limpiar espacios múltiples y líneas vacías
+        titulo_limpio = re.sub(r'\s+', ' ', titulo_limpio)
+        titulo_limpio = titulo_limpio.strip()
+        
+        # Asegurar que no termine con punto si es muy corto
+        if len(titulo_limpio) < 100 and titulo_limpio.endswith('.'):
+            titulo_limpio = titulo_limpio[:-1]
         
         return titulo_limpio
+    
+    def _similitud_texto(self, texto1: str, texto2: str) -> float:
+        """Calcular similitud entre dos textos (0-1)"""
+        if not texto1 or not texto2:
+            return 0.0
+        
+        # Convertir a minúsculas y dividir en palabras
+        palabras1 = set(texto1.lower().split())
+        palabras2 = set(texto2.lower().split())
+        
+        if not palabras1 or not palabras2:
+            return 0.0
+        
+        # Calcular intersección
+        interseccion = palabras1.intersection(palabras2)
+        union = palabras1.union(palabras2)
+        
+        return len(interseccion) / len(union) if union else 0.0
     
     def _extraer_puntos_clave(self, texto_puntos: str) -> List[str]:
         """Extraer puntos clave del texto"""

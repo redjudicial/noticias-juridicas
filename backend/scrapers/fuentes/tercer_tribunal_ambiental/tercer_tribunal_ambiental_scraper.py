@@ -11,7 +11,8 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from backend.scrapers.fuentes.base_scraper import BaseScraper
 from backend.scrapers.fuentes.data_schema import (
-    NoticiaEstandarizada,
+    NoticiaEstandarizada, 
+    MetadataNoticia,
     DataNormalizer,
     Categoria,
     Jurisdiccion,
@@ -230,21 +231,19 @@ class TercerTribunalAmbientalScraper(BaseScraper):
             # Crear noticia estandarizada
             noticia = NoticiaEstandarizada(
                 titulo=noticia_raw.get('titulo', '')[:200],
-                contenido=contenido[:2000],
-                url_fuente=noticia_raw.get('url', ''),
+                cuerpo_completo=contenido[:2000],
+                url_origen=noticia_raw.get('url', ''),
                 fecha_publicacion=fecha,
-                fuente="3TA",
+                fuente="tercer_tribunal_ambiental",
                 categoria=Categoria.TRIBUNAL,
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,
                 palabras_clave=self.extraer_palabras_clave(noticia_raw.get('titulo', '') + ' ' + contenido),
-                resumen_juridico="",
-                embedding_vector=None,
-                metadata={
-                    'scraper_version': self.version_scraper,
-                    'fecha_extraccion': datetime.now(timezone.utc).isoformat(),
-                    'url_original': noticia_raw.get('url', '')
-                }
+                metadata=MetadataNoticia(
+                    scraper_version=self.version_scraper,
+                    fecha_extraccion=datetime.now(timezone.utc),
+                    url_original=noticia_raw.get('url', '')
+                )
             )
             
             return noticia

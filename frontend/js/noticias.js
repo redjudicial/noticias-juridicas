@@ -11,7 +11,6 @@ const noticiasPorPagina = 12;
 // Elementos del DOM
 const contenedorNoticias = document.getElementById('noticias-container');
 const filtroFuente = document.getElementById('fuente-filter');
-const filtroCategoria = document.getElementById('categoria-filter');
 const ordenSelect = document.getElementById('orden-filter');
 const buscador = document.getElementById('search-input');
 const paginacion = document.getElementById('paginacion');
@@ -61,9 +60,6 @@ function configurarEventos() {
     if (filtroFuente) {
         filtroFuente.addEventListener('change', aplicarFiltros);
     }
-    if (filtroCategoria) {
-        filtroCategoria.addEventListener('change', aplicarFiltros);
-    }
     if (ordenSelect) {
         ordenSelect.addEventListener('change', aplicarOrdenamiento);
     }
@@ -81,17 +77,11 @@ function configurarEventos() {
 // Aplicar filtros
 function aplicarFiltros() {
     const fuenteSeleccionada = filtroFuente ? filtroFuente.value : '';
-    const categoriaSeleccionada = filtroCategoria ? filtroCategoria.value : '';
     const terminoBusqueda = buscador ? buscador.value.toLowerCase() : '';
     
     noticiasFiltradas = noticias.filter(noticia => {
         // Filtro por fuente
         if (fuenteSeleccionada && noticia.fuente !== fuenteSeleccionada) {
-            return false;
-        }
-        
-        // Filtro por categoría
-        if (categoriaSeleccionada && noticia.categoria !== categoriaSeleccionada) {
             return false;
         }
         
@@ -164,14 +154,15 @@ function mostrarNoticias() {
 
 // Crear elemento de noticia
 function crearElementoNoticia(noticia) {
-    const fecha = new Date(noticia.fecha_publicacion).toLocaleDateString('es-CL', {
+    // Usar fecha_actualizacion si existe, sino fecha_publicacion
+    const fechaNoticia = noticia.fecha_actualizacion || noticia.fecha_publicacion;
+    const fecha = new Date(fechaNoticia).toLocaleDateString('es-CL', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
     });
 
     const fuenteDisplay = getFuenteDisplayName(noticia.fuente);
-    const categoriaDisplay = noticia.categoria || 'General';
     const resumen = noticia.resumen_ejecutivo || 'Sin resumen disponible';
 
     return `
@@ -183,7 +174,6 @@ function crearElementoNoticia(noticia) {
                         <i class="far fa-calendar-alt"></i>
                         ${fecha}
                     </span>
-                    <span class="noticia-categoria">${categoriaDisplay}</span>
                 </div>
                 <h3 class="noticia-titulo">
                     <a href="${noticia.url_origen}" target="_blank" rel="noopener noreferrer">

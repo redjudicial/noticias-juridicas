@@ -11,7 +11,8 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from backend.scrapers.fuentes.base_scraper import BaseScraper
 from backend.scrapers.fuentes.data_schema import (
-    NoticiaEstandarizada,
+    NoticiaEstandarizada, 
+    MetadataNoticia,
     DataNormalizer,
     Categoria,
     Jurisdiccion,
@@ -223,28 +224,33 @@ class TribunalAmbientalScraper(BaseScraper):
             if len(contenido) < 100 and noticia_raw.get('url') != self.noticias_url:
                 contenido = self.extraer_contenido_completo(noticia_raw['url'])
             
-            # Normalizar fecha
-            fecha_str = noticia_raw.get('fecha', '')
-            fecha = self.normalizar_fecha(fecha_str)
+            # Extraer fecha real usando la nueva función
+            url = noticia_raw.get('url', '')
+            try:
+                response = self.session.get(url, timeout=30)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, 'html.parser')
+                fecha = self._extract_fecha_tribunal_ambiental(soup, url)
+            except:
+                # Fallback a fecha actual si no se puede extraer
+                fecha = datetime.now(timezone.utc)
             
             # Crear noticia estandarizada
             noticia = NoticiaEstandarizada(
                 titulo=noticia_raw.get('titulo', '')[:200],
-                contenido=contenido[:2000],
-                url_fuente=noticia_raw.get('url', ''),
+                cuerpo_completo=contenido[:2000],
+                url_origen=noticia_raw.get('url', ''),
                 fecha_publicacion=fecha,
-                fuente="Tribunal Ambiental",
+                fuente="tribunal_ambiental",
                 categoria=Categoria.TRIBUNAL,
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,
                 palabras_clave=self.extraer_palabras_clave(noticia_raw.get('titulo', '') + ' ' + contenido),
-                resumen_juridico="",
-                embedding_vector=None,
-                metadata={
-                    'scraper_version': self.version_scraper,
-                    'fecha_extraccion': datetime.now(timezone.utc).isoformat(),
-                    'url_original': noticia_raw.get('url', '')
-                }
+                metadata=MetadataNoticia(
+                    scraper_version=self.version_scraper,
+                    fecha_extraccion=datetime.now(timezone.utc),
+                    url_original=noticia_raw.get('url', '')
+                )
             )
             
             return noticia
@@ -306,3 +312,129 @@ class TribunalAmbientalScraper(BaseScraper):
             encontradas.append('causa')
         
         return list(set(encontradas))[:10]  # Máximo 10 palabras clave 
+
+    def _extract_fecha_tribunal_ambiental(self, soup: BeautifulSoup, url: str) -> datetime:
+        """Extraer fecha real del Tribunal Ambiental"""
+        try:
+            # Buscar fecha en diferentes selectores
+            fecha_selectors = [
+                '.fecha-publicacion',
+                '.fecha',
+                '.meta-fecha',
+                'time[datetime]',
+                '.entry-date',
+                '.post-date'
+            ]
+            
+            for selector in fecha_selectors:
+                fecha_elem = soup.select_one(selector)
+                if fecha_elem:
+                    # Intentar obtener fecha del atributo datetime
+                    datetime_attr = fecha_elem.get('datetime')
+                    if datetime_attr:
+                        try:
+                            return datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
+                        except:
+                            pass
+                    
+                    # Intentar parsear texto
+                    fecha_texto = fecha_elem.get_text(strip=True)
+                    fecha_parseada = self._parse_fecha_texto(fecha_texto)
+                    if fecha_parseada:
+                        return fecha_parseada
+            
+            # Buscar fecha en el contenido del artículo
+            contenido = soup.get_text()
+            fecha_en_contenido = self._extract_fecha_from_content(contenido)
+            if fecha_en_contenido:
+                return fecha_en_contenido
+            
+            # Buscar fecha en la URL
+            fecha_en_url = self._extract_fecha_from_url(url)
+            if fecha_en_url:
+                return fecha_en_url
+            
+            # Si no se encuentra, usar fecha actual
+            return datetime.now(timezone.utc)
+            
+        except Exception as e:
+            print(f"Error extrayendo fecha: {e}")
+            return datetime.now(timezone.utc)
+    
+    def _parse_fecha_texto(self, fecha_texto: str) -> Optional[datetime]:
+        """Parsear fecha desde texto"""
+        if not fecha_texto:
+            return None
+        
+        # Patrones específicos del Tribunal Ambiental
+        patrones = [
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',  # DD/MM/YYYY
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',  # DD-MM-YYYY
+            r'(\d{4})-(\d{1,2})-(\d{1,2})',  # YYYY-MM-DD
+            r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})',  # DD de MES de YYYY
+        ]
+        
+        for patron in patrones:
+            match = re.search(patron, fecha_texto, re.IGNORECASE)
+            if match:
+                try:
+                    grupos = match.groups()
+                    if len(grupos) == 3:
+                        if len(grupos[0]) == 4:  # Año primero
+                            año, mes, dia = grupos
+                        else:  # Día primero
+                            dia, mes, año = grupos
+                        
+                        return datetime(int(año), int(mes), int(dia), tzinfo=timezone.utc)
+                except:
+                    continue
+        
+        return None
+    
+    def _extract_fecha_from_content(self, contenido: str) -> Optional[datetime]:
+        """Extraer fecha del contenido del artículo"""
+        # Buscar patrones de fecha en el contenido
+        patrones_fecha = [
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',  # DD/MM/YYYY
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',  # DD-MM-YYYY
+            r'publicado.*?(\d{1,2})/(\d{1,2})/(\d{4})',  # publicado DD/MM/YYYY
+        ]
+        
+        for patron in patrones_fecha:
+            match = re.search(patron, contenido, re.IGNORECASE)
+            if match:
+                try:
+                    grupos = match.groups()
+                    if len(grupos) >= 3:
+                        dia, mes, año = grupos[-3:]  # Tomar los últimos 3 grupos
+                        return datetime(int(año), int(mes), int(dia), tzinfo=timezone.utc)
+                except:
+                    continue
+        
+        return None
+    
+    def _extract_fecha_from_url(self, url: str) -> Optional[datetime]:
+        """Extraer fecha de la URL"""
+        try:
+            # Buscar patrones de fecha en la URL
+            patrones_url = [
+                r'/(\d{4})/(\d{1,2})/(\d{1,2})/',  # /2025/07/28/
+                r'(\d{4})-(\d{1,2})-(\d{1,2})',   # 2025-07-28
+                r'(\d{1,2})-(\d{1,2})-(\d{4})',   # 28-07-2025
+            ]
+            
+            for patron in patrones_url:
+                match = re.search(patron, url)
+                if match:
+                    grupos = match.groups()
+                    if len(grupos) == 3:
+                        if len(grupos[0]) == 4:  # Año primero
+                            año, mes, dia = grupos
+                        else:  # Día primero
+                            dia, mes, año = grupos
+                        
+                        return datetime(int(año), int(mes), int(dia), tzinfo=timezone.utc)
+            
+            return None
+        except:
+            return None 

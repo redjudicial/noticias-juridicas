@@ -152,10 +152,10 @@ class PrimerTribunalAmbientalScraper(BaseScraper):
             # Crear noticia estandarizada
             noticia = NoticiaEstandarizada(
                 titulo=noticia_raw.get('titulo', '')[:200],
-                contenido=contenido[:2000],
-                url_fuente=noticia_raw.get('url', ''),
+                cuerpo_completo=contenido[:2000],
+                url_origen=noticia_raw.get('url', ''),
                 fecha_publicacion=fecha,
-                fuente="1TA",
+                fuente="1ta",
                 categoria=Categoria.TRIBUNAL,
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,

@@ -28,6 +28,10 @@ class Categoria(Enum):
     CONSTITUCIONAL = "constitucional"
     COMERCIAL = "comercial"
     TRIBUTARIO = "tributario"
+    INVESTIGACIONES = "investigaciones"
+    ACTIVIDADES = "actividades"
+    COMUNICADOS = "comunicados"
+    FALLOS = "fallos"
     OTRO = "otro"
 
 class Jurisdiccion(Enum):
@@ -36,6 +40,15 @@ class Jurisdiccion(Enum):
     REGIONAL = "regional"
     LOCAL = "local"
     INTERNACIONAL = "internacional"
+    ADMINISTRATIVO = "administrativo"
+    PENAL = "penal"
+    CIVIL = "civil"
+    LABORAL = "laboral"
+    AMBIENTAL = "ambiental"
+    CONSTITUCIONAL = "constitucional"
+    COMERCIAL = "comercial"
+    TRIBUTARIO = "tributario"
+    GENERAL = "general"
 
 class TipoDocumento(Enum):
     """Tipos de documentos jurídicos"""
@@ -53,6 +66,7 @@ class TipoDocumento(Enum):
     AUDIENCIA = "audiencia"
     CONCURSO = "concurso"
     LICITACION = "licitacion"
+    COMUNICADO = "comunicado"
     OTRO = "otro"
 
 @dataclass
@@ -254,11 +268,10 @@ class NoticiaEstandarizada:
             'tribunal_organismo': self.tribunal_organismo,
             'palabras_clave': self.palabras_clave,
             'etiquetas': self.etiquetas,
-            'resumen_juridico': self.resumen_juridico,
             'hash_contenido': self.hash_contenido,
             'version': self.version,
             'es_actualizacion': self.es_actualizacion,
-            # Metadata expandida
+            # Campos básicos de metadata
             'autor': self.metadata.autor_nombre,
             'autor_cargo': self.metadata.autor_cargo,
             'numero_causa': self.metadata.numero_causa,
@@ -266,30 +279,7 @@ class NoticiaEstandarizada:
             'region': self.metadata.region,
             'relevancia_juridica': self.metadata.relevancia_juridica,
             'impacto_publico': self.metadata.impacto_publico,
-            'subcategoria': self.metadata.subcategoria,
-            'scraper_version': self.metadata.scraper_version,
-            'fecha_extraccion': self.metadata.fecha_extraccion.isoformat() if self.metadata.fecha_extraccion else None,
-            'url_original': self.metadata.url_original,
-            'status_code': self.metadata.status_code,
-            'numero_palabras': self.metadata.numero_palabras,
-            'idioma': self.metadata.idioma,
-            'urgencia': self.metadata.urgencia,
-            'confidencialidad': self.metadata.confidencialidad,
-            'temas_relacionados': self.metadata.temas_relacionados,
-            'archivos_adjuntos': self.metadata.archivos_adjuntos,
-            'imagenes': self.metadata.imagenes,
-            'documentos_pdf': self.metadata.documentos_pdf,
-            'enlaces_relacionados': self.metadata.enlaces_relacionados,
-            'referencias_bibliograficas': self.metadata.referencias_bibliograficas,
-            'contacto_nombre': self.metadata.contacto_nombre,
-            'contacto_email': self.metadata.contacto_email,
-            'contacto_telefono': self.metadata.contacto_telefono,
-            'fecha_evento': self.metadata.fecha_evento.isoformat() if self.metadata.fecha_evento else None,
-            'lugar_evento': self.metadata.lugar_evento,
-            'tipo_evento': self.metadata.tipo_evento,
-            'estado_seguimiento': self.metadata.estado_seguimiento,
-            'proxima_audiencia': self.metadata.proxima_audiencia.isoformat() if self.metadata.proxima_audiencia else None,
-            'plazo_vencimiento': self.metadata.plazo_vencimiento.isoformat() if self.metadata.plazo_vencimiento else None
+            'subcategoria': self.metadata.subcategoria
         }
 
 class DataNormalizer:

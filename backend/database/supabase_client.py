@@ -37,13 +37,32 @@ class SupabaseClient:
     # OPERACIONES DE NOTICIAS
     # ========================================
     
-    def insert_noticia(self, datos: Dict) -> Optional[str]:
+    def insert_noticia(self, datos: Any) -> Optional[str]:
         """Insertar nueva noticia"""
         try:
+            # Convertir NoticiaEstandarizada a dict si es necesario
+            if hasattr(datos, '__dict__'):
+                # Es un objeto, convertir a dict
+                datos_dict = {
+                    'titulo': datos.titulo,
+                    'cuerpo_completo': datos.cuerpo_completo,
+                    'url_origen': datos.url_origen,
+                    'fecha_publicacion': datos.fecha_publicacion.isoformat() if datos.fecha_publicacion else None,
+                    'fuente': datos.fuente,
+                    'categoria': datos.categoria.value if hasattr(datos.categoria, 'value') else str(datos.categoria),
+                    'jurisdiccion': datos.jurisdiccion.value if hasattr(datos.jurisdiccion, 'value') else str(datos.jurisdiccion),
+                    'tipo_documento': datos.tipo_documento.value if hasattr(datos.tipo_documento, 'value') else str(datos.tipo_documento),
+                    'palabras_clave': datos.palabras_clave,
+                    'hash_contenido': datos.hash_contenido if hasattr(datos, 'hash_contenido') else None
+                }
+            else:
+                # Ya es un dict
+                datos_dict = datos
+            
             response = requests.post(
                 f'{self.url}/rest/v1/noticias_juridicas',
                 headers=self.headers,
-                json=datos
+                json=datos_dict
             )
             
             if response.status_code == 201:
@@ -92,6 +111,25 @@ class SupabaseClient:
             
         except Exception as e:
             print(f"❌ Error en get_noticia_by_hash: {e}")
+            return None
+    
+    def get_noticia_by_url(self, url_origen: str) -> Optional[Dict]:
+        """Obtener noticia por URL (más confiable para evitar duplicados)"""
+        try:
+            response = requests.get(
+                f'{self.url}/rest/v1/noticias_juridicas?url_origen=eq.{url_origen}&limit=1',
+                headers=self.headers
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    return result[0]
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error en get_noticia_by_url: {e}")
             return None
     
     def get_noticias_recientes(self, limit: int = 10, offset: int = 0, fuente: str = None) -> List[Dict]:

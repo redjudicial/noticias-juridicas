@@ -24,7 +24,8 @@ from ..data_schema import (
     DataNormalizer,
     Categoria,
     Jurisdiccion,
-    TipoDocumento
+    TipoDocumento,
+    MetadataNoticia
 )
 
 class PoderJudicialScraperV2(BaseScraper):
@@ -191,7 +192,7 @@ class PoderJudicialScraperV2(BaseScraper):
             titulo = titulo or (titulo_elem.get_text(strip=True) if titulo_elem else "Sin título")
             
             # Buscar fecha
-            fecha = self._extract_fecha_poder_judicial(soup)
+            fecha = self._extract_fecha_poder_judicial(soup, titulo, url)
             
             # Buscar contenido
             contenido = self._extract_contenido_poder_judicial(soup)
@@ -205,19 +206,27 @@ class PoderJudicialScraperV2(BaseScraper):
             # Extraer autor si existe
             autor_info = self._extract_autor_poder_judicial(soup)
             
-            # Crear noticia estandarizada
-            noticia = self._crear_noticia_estandarizada(
+            # Crear noticia estandarizada directamente
+            noticia = NoticiaEstandarizada(
                 titulo=titulo,
                 cuerpo_completo=contenido,
                 fecha_publicacion=fecha,
                 fuente='poder_judicial',
-                fuente_nombre_completo='Poder Judicial de Chile',
                 url_origen=url,
+                categoria=info_legal.get('categoria', Categoria.OTRO),
+                jurisdiccion=info_legal.get('jurisdiccion', Jurisdiccion.NACIONAL),
+                tipo_documento=info_legal.get('tipo_documento', TipoDocumento.NOTICIA),
+                titulo_original=titulo,
+                fuente_nombre_completo='Poder Judicial de Chile',
                 url_imagen=imagen_url,
-                autor=autor_info.get('autor'),
-                autor_cargo=autor_info.get('cargo'),
-                version_scraper=self.version_scraper,
-                **info_legal
+                tribunal_organismo=info_legal.get('tribunal_organismo'),
+                palabras_clave=[],
+                etiquetas=[],
+                metadata=MetadataNoticia(
+                    autor_nombre=autor_info.get('autor'),
+                    autor_cargo=autor_info.get('cargo'),
+                    scraper_version=self.version_scraper
+                )
             )
             
             # Validar noticia
@@ -231,7 +240,7 @@ class PoderJudicialScraperV2(BaseScraper):
             self._log_error("Error en extracción específica del Poder Judicial", e)
             return None
     
-    def _extract_fecha_poder_judicial(self, soup: BeautifulSoup) -> datetime:
+    def _extract_fecha_poder_judicial(self, soup: BeautifulSoup, titulo: str = None, url: str = None) -> datetime:
         """Extraer fecha específica del Poder Judicial"""
         # Buscar fecha en diferentes formatos del Poder Judicial
         fecha_selectors = [
@@ -259,6 +268,18 @@ class PoderJudicialScraperV2(BaseScraper):
                 fecha_parseada = self._parse_fecha_poder_judicial(fecha_texto)
                 if fecha_parseada:
                     return fecha_parseada
+        
+        # Si no se encuentra, intentar extraer del título o URL
+        if titulo:
+            fecha_titulo = self._extract_fecha_from_text(titulo)
+            if fecha_titulo:
+                return fecha_titulo
+        
+        # Buscar fecha en la URL
+        if url and 'noticias-del-poder-judicial' in url:
+            fecha_url = self._extract_fecha_from_url(url)
+            if fecha_url:
+                return fecha_url
         
         # Si no se encuentra, usar fecha actual
         return datetime.now(timezone.utc)
@@ -387,15 +408,13 @@ class PoderJudicialScraperV2(BaseScraper):
         else:
             info['jurisdiccion'] = Jurisdiccion.GENERAL
         
-        # Determinar tipo de documento específico del Poder Judicial
-        if any(palabra in contenido.lower() for palabra in ['fallo', 'sentencia', 'resolucion']):
-            info['tipo_documento'] = TipoDocumento.FALLO
-        elif 'resolución' in contenido.lower():
+        # Tipo de documento
+        if any(palabra in contenido.lower() for palabra in ['sentencia', 'fallo', 'resolución']):
+            info['tipo_documento'] = TipoDocumento.SENTENCIA
+        elif any(palabra in contenido.lower() for palabra in ['resolución', 'acuerdo']):
             info['tipo_documento'] = TipoDocumento.RESOLUCION
-        elif 'acuerdo' in contenido.lower():
-            info['tipo_documento'] = TipoDocumento.ACUERDO
-        elif 'comunicado' in contenido.lower():
-            info['tipo_documento'] = TipoDocumento.COMUNICADO
+        elif any(palabra in contenido.lower() for palabra in ['audiencia', 'vista']):
+            info['tipo_documento'] = TipoDocumento.AUDIENCIA
         else:
             info['tipo_documento'] = TipoDocumento.NOTICIA
         
@@ -407,7 +426,7 @@ class PoderJudicialScraperV2(BaseScraper):
         elif 'comunicado' in contenido.lower():
             info['categoria'] = Categoria.COMUNICADOS
         else:
-            info['categoria'] = Categoria.NOTICIAS
+            info['categoria'] = Categoria.OTRO
         
         return info
     

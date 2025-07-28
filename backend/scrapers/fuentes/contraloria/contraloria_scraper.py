@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 from backend.scrapers.fuentes.base_scraper import BaseScraper
 from backend.scrapers.fuentes.data_schema import (
     NoticiaEstandarizada, 
+    MetadataNoticia,
     DataNormalizer,
     Categoria,
     Jurisdiccion,
@@ -51,55 +52,147 @@ class ContraloriaScraper(BaseScraper):
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Buscar enlaces de noticias
-            noticias_links = []
+            # Extraer noticias con fechas de la página principal
+            noticias = self._extract_noticias_con_fechas(soup, max_noticias)
             
-            # Buscar todos los enlaces que contengan noticias
-            links = soup.find_all('a', href=True)
+            if noticias:
+                self._log_success(f"Encontradas {len(noticias)} noticias de la Contraloría con fechas")
+                return noticias
             
-            for link in links:
-                href = link.get('href', '')
-                titulo = link.get_text(strip=True)
-                
-                # Filtrar enlaces válidos de noticias
-                if (href and 
-                    titulo and 
-                    len(titulo) > 10 and
-                    ('noticias' in href.lower() or 'content' in href.lower()) and
-                    not any(excl in titulo.lower() for excl in ['inicio', 'menu', 'contacto', 'transparencia', 'página', 'anterior', 'siguiente'])):
-                    
-                    # Construir URL completa
-                    if href.startswith('/'):
-                        url = self.base_url + href
-                    elif href.startswith('http'):
-                        url = href
-                    else:
-                        url = self.base_url + '/' + href
-                    
-                    noticias_links.append({
-                        'url': url,
-                        'titulo': titulo
-                    })
-                    
-                    if len(noticias_links) >= max_noticias:
-                        break
-            
-            # Eliminar duplicados
-            seen_urls = set()
-            unique_links = []
-            for link in noticias_links:
-                if link['url'] not in seen_urls:
-                    seen_urls.add(link['url'])
-                    unique_links.append(link)
-            
-            self._log_success(f"Encontradas {len(unique_links)} noticias de la Contraloría")
-            return unique_links[:max_noticias]
+            # Fallback: método anterior si no se encuentran fechas
+            self._log_warning("No se encontraron fechas, usando método fallback")
+            return self._get_noticias_fallback(soup, max_noticias)
             
         except Exception as e:
             self._log_error("Error obteniendo noticias de la Contraloría", e)
             return []
     
-    def get_noticia_completa(self, url: str, titulo: str = None) -> Optional[NoticiaEstandarizada]:
+    def _extract_noticias_con_fechas(self, soup: BeautifulSoup, max_noticias: int) -> List[Dict]:
+        """Extraer noticias con fechas de la página principal"""
+        noticias = []
+        
+        # Buscar patrones de fecha en el texto completo
+        texto_completo = soup.get_text()
+        
+        # Buscar fechas en formato DD/MM/YYYY
+        fechas_encontradas = re.findall(r'(\d{1,2})/(\d{1,2})/(\d{4})', texto_completo)
+        
+        # Buscar títulos cerca de las fechas
+        for fecha_match in fechas_encontradas:
+            fecha_texto = f"{fecha_match[0]}/{fecha_match[1]}/{fecha_match[2]}"
+            
+            # Buscar el título más cercano a esta fecha
+            titulo = self._buscar_titulo_cerca_fecha(soup, fecha_texto)
+            
+            if titulo:
+                # Buscar URL asociada al título
+                url = self._buscar_url_titulo(soup, titulo)
+                
+                if url:
+                    noticias.append({
+                        'titulo': titulo,
+                        'url': url,
+                        'fecha': fecha_texto
+                    })
+                    
+                    if len(noticias) >= max_noticias:
+                        break
+        
+        return noticias
+    
+    def _buscar_titulo_cerca_fecha(self, soup: BeautifulSoup, fecha_texto: str) -> Optional[str]:
+        """Buscar título cerca de una fecha específica"""
+        # Buscar elementos que contengan la fecha
+        elementos_con_fecha = soup.find_all(text=re.compile(re.escape(fecha_texto)))
+        
+        for elemento in elementos_con_fecha:
+            # Buscar título en elementos cercanos
+            parent = elemento.parent
+            for _ in range(5):  # Buscar hasta 5 niveles arriba
+                if parent:
+                    # Buscar título en el mismo elemento o cercano
+                    titulo_elem = parent.find(['h1', 'h2', 'h3', 'h4', 'a'])
+                    if titulo_elem:
+                        titulo = titulo_elem.get_text(strip=True)
+                        if titulo and len(titulo) > 20:
+                            return titulo
+                    
+                    # Buscar en elementos hermanos
+                    for sibling in parent.find_previous_siblings():
+                        titulo_elem = sibling.find(['h1', 'h2', 'h3', 'h4', 'a'])
+                        if titulo_elem:
+                            titulo = titulo_elem.get_text(strip=True)
+                            if titulo and len(titulo) > 20:
+                                return titulo
+                    
+                    parent = parent.parent
+        
+        return None
+    
+    def _buscar_url_titulo(self, soup: BeautifulSoup, titulo: str) -> Optional[str]:
+        """Buscar URL asociada a un título"""
+        # Buscar enlaces que contengan el título
+        links = soup.find_all('a', href=True)
+        
+        for link in links:
+            link_text = link.get_text(strip=True)
+            if link_text == titulo or titulo in link_text:
+                href = link.get('href', '')
+                if href:
+                    if href.startswith('/'):
+                        return self.base_url + href
+                    elif href.startswith('http'):
+                        return href
+                    else:
+                        return self.base_url + '/' + href
+        
+        return None
+    
+    def _get_noticias_fallback(self, soup: BeautifulSoup, max_noticias: int) -> List[Dict]:
+        """Método fallback para obtener noticias sin fechas"""
+        noticias_links = []
+        
+        # Buscar todos los enlaces que contengan noticias
+        links = soup.find_all('a', href=True)
+        
+        for link in links:
+            href = link.get('href', '')
+            titulo = link.get_text(strip=True)
+            
+            # Filtrar enlaces válidos de noticias
+            if (href and 
+                titulo and 
+                len(titulo) > 10 and
+                ('noticias' in href.lower() or 'content' in href.lower()) and
+                not any(excl in titulo.lower() for excl in ['inicio', 'menu', 'contacto', 'transparencia', 'página', 'anterior', 'siguiente'])):
+                
+                # Construir URL completa
+                if href.startswith('/'):
+                    url = self.base_url + href
+                elif href.startswith('http'):
+                    url = href
+                else:
+                    url = self.base_url + '/' + href
+                
+                noticias_links.append({
+                    'url': url,
+                    'titulo': titulo
+                })
+                
+                if len(noticias_links) >= max_noticias:
+                    break
+        
+        # Eliminar duplicados
+        seen_urls = set()
+        unique_links = []
+        for link in noticias_links:
+            if link['url'] not in seen_urls:
+                seen_urls.add(link['url'])
+                unique_links.append(link)
+        
+        return unique_links[:max_noticias]
+    
+    def get_noticia_completa(self, url: str, titulo: str = None, fecha_str: str = None) -> Optional[NoticiaEstandarizada]:
         """Obtener noticia completa desde una URL de la Contraloría"""
         try:
             self._log_info(f"Extrayendo noticia de la Contraloría: {url}")
@@ -145,8 +238,12 @@ class ContraloriaScraper(BaseScraper):
                 contenido = f"Noticia de la Contraloría General de la República: {titulo}"
                 self._log_warning(f"Contenido limitado para {url}, usando título como contenido")
             
-            # Extraer fecha
-            fecha = self._extract_fecha_contraloria(soup)
+            # Extraer fecha - usar la fecha de la página principal si está disponible
+            if fecha_str:
+                fecha = self._parse_fecha_contraloria(fecha_str)
+            else:
+                fecha = self._extract_fecha_contraloria(soup)
+            
             if not fecha:
                 fecha = datetime.now(timezone.utc)
             
@@ -173,17 +270,22 @@ class ContraloriaScraper(BaseScraper):
             info_legal = self._extract_info_legal_contraloria(soup, contenido)
             
             # Crear noticia estandarizada
-            noticia = self._crear_noticia_estandarizada(
-                titulo=titulo,
-                cuerpo_completo=contenido,
-                fecha_publicacion=fecha,
-                fuente='contraloria',
-                fuente_nombre_completo='Contraloría General de la República',
+            noticia = NoticiaEstandarizada(
+                titulo=titulo[:200],
+                cuerpo_completo=contenido[:2000],
                 url_origen=url,
+                fecha_publicacion=fecha,
+                fuente="contraloria",
+                categoria=info_legal.get('categoria', Categoria.ADMINISTRATIVO),
+                jurisdiccion=info_legal.get('jurisdiccion', Jurisdiccion.ADMINISTRATIVO),
+                tipo_documento=info_legal.get('tipo_documento', TipoDocumento.COMUNICADO),
+                palabras_clave=self.extraer_palabras_clave(titulo + ' ' + contenido),
                 url_imagen=url_imagen,
-                autor=autor,
-                version_scraper=self.version_scraper,
-                **info_legal
+                metadata=MetadataNoticia(
+                    autor_nombre=autor,
+                    scraper_version=self.version_scraper,
+                    fecha_extraccion=datetime.now(timezone.utc)
+                )
             )
             
             if not self._validar_noticia(noticia):
@@ -244,6 +346,30 @@ class ContraloriaScraper(BaseScraper):
             self._log_warning(f"Error extrayendo fecha de Contraloría: {e}")
             return None
     
+    def _parse_fecha_contraloria(self, fecha_str: str) -> Optional[datetime]:
+        """Parsear fecha de la Contraloría desde string"""
+        try:
+            if not fecha_str:
+                return None
+            
+            # Formato DD/MM/YYYY (como 25/07/2025)
+            if re.match(r'\d{1,2}/\d{1,2}/\d{4}', fecha_str):
+                return datetime.strptime(fecha_str, '%d/%m/%Y').replace(tzinfo=timezone.utc)
+            
+            # Formato DD-MM-YYYY
+            if re.match(r'\d{1,2}-\d{1,2}-\d{4}', fecha_str):
+                return datetime.strptime(fecha_str, '%d-%m-%Y').replace(tzinfo=timezone.utc)
+            
+            # Formato YYYY-MM-DD
+            if re.match(r'\d{4}-\d{1,2}-\d{1,2}', fecha_str):
+                return datetime.strptime(fecha_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            
+            return None
+            
+        except Exception as e:
+            self._log_warning(f"Error parseando fecha '{fecha_str}': {e}")
+            return None
+    
     def _extract_info_legal_contraloria(self, soup: BeautifulSoup, contenido: str) -> Dict:
         """Extraer información legal específica de Contraloría"""
         info = {}
@@ -267,11 +393,11 @@ class ContraloriaScraper(BaseScraper):
         
         # Categoría
         if any(palabra in contenido_lower for palabra in ['auditoría', 'control', 'fiscalización']):
-            info['categoria'] = Categoria.INVESTIGACIONES
+            info['categoria'] = Categoria.ADMINISTRATIVO
         elif any(palabra in contenido_lower for palabra in ['dictamen', 'pronunciamiento']):
-            info['categoria'] = Categoria.COMUNICADOS
+            info['categoria'] = Categoria.ADMINISTRATIVO
         else:
-            info['categoria'] = Categoria.ACTIVIDADES
+            info['categoria'] = Categoria.ADMINISTRATIVO
         
         return info
     
@@ -293,7 +419,9 @@ class ContraloriaScraper(BaseScraper):
             try:
                 self._log_info(f"Procesando noticia {i+1}/{len(noticias_links)}: {link['titulo'][:50]}...")
                 
-                noticia = self.get_noticia_completa(link['url'], link['titulo'])
+                # Pasar la fecha si está disponible
+                fecha_str = link.get('fecha')
+                noticia = self.get_noticia_completa(link['url'], link['titulo'], fecha_str)
                 
                 if noticia:
                     noticias_completas.append(noticia)

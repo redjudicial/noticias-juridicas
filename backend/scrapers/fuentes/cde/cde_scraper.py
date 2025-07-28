@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 from backend.scrapers.fuentes.base_scraper import BaseScraper
 from backend.scrapers.fuentes.data_schema import (
     NoticiaEstandarizada, 
+    MetadataNoticia,
     DataNormalizer,
     Categoria,
     Jurisdiccion,
@@ -216,17 +217,22 @@ class CDEScraper(BaseScraper):
             info_legal = self._extract_info_legal_cde(soup, contenido)
             
             # Crear noticia estandarizada
-            noticia = self._crear_noticia_estandarizada(
-                titulo=titulo,
-                cuerpo_completo=contenido,
-                fecha_publicacion=fecha,
-                fuente='cde',
-                fuente_nombre_completo='Comisión de Defensa de la Libre Competencia',
+            noticia = NoticiaEstandarizada(
+                titulo=titulo[:200],
+                cuerpo_completo=contenido[:2000],
                 url_origen=url,
+                fecha_publicacion=fecha,
+                fuente="cde",
+                categoria=info_legal.get('categoria', Categoria.COMERCIAL),
+                jurisdiccion=info_legal.get('jurisdiccion', Jurisdiccion.COMERCIAL),
+                tipo_documento=info_legal.get('tipo_documento', TipoDocumento.COMUNICADO),
+                palabras_clave=self.extraer_palabras_clave(titulo + ' ' + contenido),
                 url_imagen=url_imagen,
-                autor=autor,
-                version_scraper=self.version_scraper,
-                **info_legal
+                metadata=MetadataNoticia(
+                    autor_nombre=autor,
+                    scraper_version=self.version_scraper,
+                    fecha_extraccion=datetime.now(timezone.utc)
+                )
             )
             
             if not self._validar_noticia(noticia):
@@ -311,11 +317,11 @@ class CDEScraper(BaseScraper):
         
         # Categoría
         if any(palabra in contenido_lower for palabra in ['libre competencia', 'antitrust', 'monopolio']):
-            info['categoria'] = Categoria.INVESTIGACIONES
+            info['categoria'] = Categoria.COMERCIAL
         elif any(palabra in contenido_lower for palabra in ['comunicado', 'anuncio', 'información']):
-            info['categoria'] = Categoria.COMUNICADOS
+            info['categoria'] = Categoria.COMERCIAL
         else:
-            info['categoria'] = Categoria.ACTIVIDADES
+            info['categoria'] = Categoria.COMERCIAL
         
         return info
     
