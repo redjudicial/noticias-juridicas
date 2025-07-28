@@ -284,7 +284,14 @@ class ContentProcessor:
             r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}',  # Fechas con hora
             r'\d{2}:\d{2}',  # Horas sueltas
             r'Compartir\s+Compartir',
+            r'Compartir\s*',  # Solo "Compartir"
             r'×\s*',  # Símbolos de multiplicación
+            r'Portal Unificado de Sentencias.*?Compartir',
+            r'Fiscalía.*?Compartir',
+            r'Corte de Apelaciones.*?Compartir',
+            r'Corte Suprema.*?Compartir',
+            r'TOP.*?Compartir',
+            r'Juzgado.*?Compartir',
         ]
         
         contenido_limpio = contenido
@@ -304,6 +311,7 @@ class ContentProcessor:
         # Eliminar fechas y horas del título
         titulo_limpio = re.sub(r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}', '', titulo)
         titulo_limpio = re.sub(r'\d{2}:\d{2}', '', titulo_limpio)
+        titulo_limpio = re.sub(r'\d{2}-\d{2}-\d{4}', '', titulo_limpio)  # Solo fecha
         titulo_limpio = re.sub(r'\s+', ' ', titulo_limpio).strip()
         
         return titulo_limpio
