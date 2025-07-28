@@ -113,11 +113,15 @@ class ContentProcessor:
             Dict con 'titulo_resumen', 'subtitulo', 'resumen_contenido', 'puntos_clave'
         """
         try:
+            # Limpiar título y contenido
+            titulo_limpio = self._limpiar_titulo(titulo)
+            contenido_limpio = self._limpiar_contenido(contenido)
+            
             if not self.openai_api_key:
-                return self._generar_resumen_manual(titulo, contenido, fuente)
+                return self._generar_resumen_manual(titulo_limpio, contenido_limpio, fuente)
             
             # Preparar prompt para IA
-            prompt = self._crear_prompt_resumen(titulo, contenido, fuente)
+            prompt = self._crear_prompt_resumen(titulo_limpio, contenido_limpio, fuente)
             
             # Llamar a OpenAI
             response = openai.ChatCompletion.create(
@@ -140,7 +144,7 @@ class ContentProcessor:
             respuesta_ia = response.choices[0].message.content
             
             # Parsear la respuesta estructurada
-            return self._parsear_respuesta_ia(respuesta_ia, titulo, contenido, fuente)
+            return self._parsear_respuesta_ia(respuesta_ia, titulo_limpio, contenido_limpio, fuente)
             
         except Exception as e:
             print(f"❌ Error generando resumen con IA: {str(e)}")
@@ -212,13 +216,16 @@ class ContentProcessor:
     
     def _generar_resumen_manual(self, titulo: str, contenido: str, fuente: str) -> Dict[str, str]:
         """Generar resumen manual cuando IA no está disponible"""
+        # Limpiar título y contenido
+        titulo_limpio = self._limpiar_titulo(titulo)
+        contenido_limpio = self._limpiar_contenido(contenido)
+        
         # Extraer información clave del contenido
-        palabras_clave = self._extraer_palabras_clave(contenido)
         fecha = self._extraer_fecha(contenido)
         tribunal = self._extraer_tribunal(contenido)
         
         # Generar resumen básico directo
-        resumen = titulo
+        resumen = titulo_limpio
         if tribunal:
             resumen += f" del {tribunal}"
         if fecha:
@@ -226,28 +233,31 @@ class ContentProcessor:
         resumen += ". "
         
         # Agregar información adicional del contenido si está disponible
-        if len(contenido) > 50:
-            # Tomar las primeras 150 palabras del contenido para complementar
-            palabras_adicionales = contenido.split()[:150]
+        if len(contenido_limpio) > 50:
+            # Tomar las primeras 100 palabras del contenido para complementar
+            palabras_adicionales = contenido_limpio.split()[:100]
             contenido_adicional = ' '.join(palabras_adicionales)
             resumen += contenido_adicional.strip()
             if not resumen.endswith('.'):
                 resumen += '.'
         
         return {
-            'titulo_resumen': titulo,
+            'titulo_resumen': titulo_limpio,
             'subtitulo': "",
             'resumen_contenido': resumen,
             'puntos_clave': [],
             'implicaciones_juridicas': "",
-            'palabras_clave': palabras_clave[:3],
+            'palabras_clave': [],  # Eliminar palabras clave
             'fuente': fuente
         }
     
     def _generar_resumen_basico(self, contenido: str) -> str:
         """Generar resumen básico del contenido"""
-        # Tomar las primeras 200 palabras y limpiar
-        palabras = contenido.split()[:200]
+        # Limpiar contenido de información irrelevante
+        contenido_limpio = self._limpiar_contenido(contenido)
+        
+        # Tomar las primeras 150 palabras y limpiar
+        palabras = contenido_limpio.split()[:150]
         resumen = ' '.join(palabras)
         
         # Limpiar y formatear
@@ -259,6 +269,44 @@ class ContentProcessor:
             resumen += '.'
         
         return resumen
+    
+    def _limpiar_contenido(self, contenido: str) -> str:
+        """Limpiar contenido de información irrelevante"""
+        # Patrones a eliminar
+        patrones_a_eliminar = [
+            r'Poder Judicial Radio.*?Compartir',
+            r'Los horarios de atención son.*?horas\.',
+            r'Atención por teléfonos.*?\d+',
+            r'Licitaciones del Poder Judicial.*?Licitaciones adjudicadas',
+            r'Prensa y Comunicaciones.*?Proyectos de Ley',
+            r'Consulta Ciudadana.*?Sistema de traducción',
+            r'Canal preferencial.*?creole\.',
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}',  # Fechas con hora
+            r'\d{2}:\d{2}',  # Horas sueltas
+            r'Compartir\s+Compartir',
+            r'×\s*',  # Símbolos de multiplicación
+        ]
+        
+        contenido_limpio = contenido
+        
+        # Aplicar cada patrón de limpieza
+        for patron in patrones_a_eliminar:
+            contenido_limpio = re.sub(patron, '', contenido_limpio, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Limpiar espacios múltiples y líneas vacías
+        contenido_limpio = re.sub(r'\s+', ' ', contenido_limpio)
+        contenido_limpio = re.sub(r'\n\s*\n', '\n', contenido_limpio)
+        
+        return contenido_limpio.strip()
+    
+    def _limpiar_titulo(self, titulo: str) -> str:
+        """Limpiar título de fechas y horas"""
+        # Eliminar fechas y horas del título
+        titulo_limpio = re.sub(r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}', '', titulo)
+        titulo_limpio = re.sub(r'\d{2}:\d{2}', '', titulo_limpio)
+        titulo_limpio = re.sub(r'\s+', ' ', titulo_limpio).strip()
+        
+        return titulo_limpio
     
     def _extraer_puntos_clave(self, texto_puntos: str) -> List[str]:
         """Extraer puntos clave del texto"""
