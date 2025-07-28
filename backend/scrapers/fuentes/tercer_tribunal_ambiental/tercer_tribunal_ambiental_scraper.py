@@ -228,10 +228,20 @@ class TercerTribunalAmbientalScraper(BaseScraper):
             fecha_str = noticia_raw.get('fecha', '')
             fecha = self.normalizar_fecha(fecha_str)
             
+            # Aplicar prefijo al título
+            titulo_original = noticia_raw.get('titulo', '')[:200]
+            titulo_con_prefijo = f"(3º) {titulo_original}"
+            
+            # Aplicar prefijo al contenido si no empieza con el prefijo
+            if not contenido.startswith("(3º)"):
+                contenido_con_prefijo = f"(3º) {contenido}"
+            else:
+                contenido_con_prefijo = contenido
+            
             # Crear noticia estandarizada
             noticia = NoticiaEstandarizada(
-                titulo=noticia_raw.get('titulo', '')[:200],
-                cuerpo_completo=contenido[:2000],
+                titulo=titulo_con_prefijo,
+                cuerpo_completo=contenido_con_prefijo[:2000],
                 url_origen=noticia_raw.get('url', ''),
                 fecha_publicacion=fecha,
                 fuente="3ta",

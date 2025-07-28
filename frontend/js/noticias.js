@@ -291,8 +291,8 @@ function getFuenteDisplayName(fuente) {
         'tdpi': 'Tribunal de Propiedad Industrial',
         'cde': 'Consejo de Defensa del Estado',
         'tdlc': 'Tribunal de Defensa de la Libre Competencia',
-        'primer_tribunal_ambiental': 'Primer Tribunal Ambiental',
-        'tercer_tribunal_ambiental': 'Tercer Tribunal Ambiental',
+        '1ta': 'Tribunal Ambiental',
+        '3ta': 'Tribunal Ambiental',
         'tribunal_ambiental': 'Tribunal Ambiental',
         'ministerio_justicia': 'Ministerio de Justicia'
     };
