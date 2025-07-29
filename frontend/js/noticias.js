@@ -43,7 +43,10 @@ async function cargarNoticias() {
         noticias = await response.json();
         noticiasFiltradas = [...noticias];
         
-        // Aplicar ordenamiento por defecto (más recientes primero)
+        // Aplicar ordenamiento aleatorio por defecto para mostrar variedad de fuentes
+        if (ordenSelect) {
+            ordenSelect.value = 'aleatorio';
+        }
         aplicarOrdenamiento();
         
         actualizarEstadisticas();
@@ -122,6 +125,9 @@ function aplicarOrdenamiento() {
                 return a.fuente.localeCompare(b.fuente);
             case 'relevancia_desc':
                 return (b.relevancia_juridica || 0) - (a.relevancia_juridica || 0);
+            case 'aleatorio':
+                // Ordenamiento aleatorio para mostrar variedad de fuentes
+                return Math.random() - 0.5;
             default:
                 return new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
         }
@@ -217,13 +223,51 @@ function mostrarPaginacion() {
         </button>`;
     }
     
-    // Números de página
-    const inicio = Math.max(1, paginaActual - 2);
-    const fin = Math.min(totalPaginas, paginaActual + 2);
+    // Números de página - mostrar hasta 10 páginas
+    let inicio = Math.max(1, paginaActual - 4);
+    let fin = Math.min(totalPaginas, paginaActual + 4);
     
+    // Ajustar para mostrar siempre 10 páginas si es posible
+    if (totalPaginas <= 10) {
+        inicio = 1;
+        fin = totalPaginas;
+    } else {
+        // Si hay más de 10 páginas, mostrar 10 alrededor de la página actual
+        const paginasAMostrar = 10;
+        const mitad = Math.floor(paginasAMostrar / 2);
+        
+        if (paginaActual <= mitad) {
+            inicio = 1;
+            fin = paginasAMostrar;
+        } else if (paginaActual > totalPaginas - mitad) {
+            inicio = totalPaginas - paginasAMostrar + 1;
+            fin = totalPaginas;
+        } else {
+            inicio = paginaActual - mitad;
+            fin = paginaActual + mitad;
+        }
+    }
+    
+    // Agregar "..." si hay páginas antes
+    if (inicio > 1) {
+        paginacionHTML += `<button onclick="cambiarPagina(1)" class="btn-pagina">1</button>`;
+        if (inicio > 2) {
+            paginacionHTML += `<span class="paginacion-ellipsis">...</span>`;
+        }
+    }
+    
+    // Números de página
     for (let i = inicio; i <= fin; i++) {
         const clase = i === paginaActual ? 'btn-pagina activa' : 'btn-pagina';
         paginacionHTML += `<button onclick="cambiarPagina(${i})" class="${clase}">${i}</button>`;
+    }
+    
+    // Agregar "..." si hay páginas después
+    if (fin < totalPaginas) {
+        if (fin < totalPaginas - 1) {
+            paginacionHTML += `<span class="paginacion-ellipsis">...</span>`;
+        }
+        paginacionHTML += `<button onclick="cambiarPagina(${totalPaginas})" class="btn-pagina">${totalPaginas}</button>`;
     }
     
     // Botón siguiente

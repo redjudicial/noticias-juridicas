@@ -47,6 +47,10 @@ body {
     z-index: 1000;
 }
 
+.nav {
+    position: relative;
+}
+
 .nav-container {
     display: flex;
     justify-content: space-between;
@@ -99,6 +103,16 @@ body {
     display: none;
     font-size: 1.5rem;
     cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.mobile-menu-btn:hover {
+    color: var(--primary-color);
+}
+
+.mobile-menu-btn.active {
+    color: var(--primary-color);
 }
 
 /* Hero Section */
@@ -470,6 +484,29 @@ body {
     border-color: var(--primary-color);
 }
 
+/* Estilos para los puntos suspensivos en paginación */
+.paginacion-ellipsis {
+    padding: 0.75rem 0.5rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    user-select: none;
+}
+
+/* Mejorar el espaciado de la paginación para más botones */
+.paginacion {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.btn-pagina {
+    min-width: 2.5rem;
+    justify-content: center;
+}
+
 /* Mensajes de error y estado vacío */
 .error-mensaje,
 .no-noticias {
@@ -523,6 +560,19 @@ body {
 @media (max-width: 768px) {
     .nav-links {
         display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bg-white);
+        flex-direction: column;
+        padding: 1rem;
+        box-shadow: var(--shadow-medium);
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .nav-links.active {
+        display: flex;
     }
     
     .mobile-menu-btn {

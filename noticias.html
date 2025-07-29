@@ -48,7 +48,7 @@
             <div class="nav-container">
                 <div class="logo">
                     <a href="https://www.redjudicial.cl" aria-label="Ir a página principal">
-                        <img src="logo-original.png" alt="Logo Red Judicial" class="logo-img" loading="lazy">
+                        <img src="logo-original.png" alt="Logo Red Judicial, plataforma legal y networking para abogados en Chile" class="logo-img" loading="lazy">
                     </a>
                 </div>
                 <div class="nav-links">
@@ -102,6 +102,7 @@
                         <div class="control-grupo">
                             <label for="orden-filter">Ordenar por</label>
                             <select id="orden-filter">
+                                <option value="aleatorio">Variedad de fuentes</option>
                                 <option value="fecha_desc">Más recientes</option>
                                 <option value="fecha_asc">Más antiguos</option>
                                 <option value="relevancia">Relevancia</option>
@@ -207,6 +208,21 @@
 
     <!-- JavaScript -->
     <script src="frontend/js/noticias.js?v=20250729-03-NOCACHE" defer></script>
+    
+    <!-- Menú móvil -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+            const navLinks = document.querySelector('.nav-links');
+            
+            if (mobileMenuBtn && navLinks) {
+                mobileMenuBtn.addEventListener('click', function() {
+                    navLinks.classList.toggle('active');
+                    mobileMenuBtn.classList.toggle('active');
+                });
+            }
+        });
+    </script>
     
     <!-- Widget de Chat -->
     <script src="chat-widget.js"></script>
