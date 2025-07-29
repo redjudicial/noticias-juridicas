@@ -379,11 +379,7 @@ body {
     margin: 0;
     line-height: 1.6;
     color: var(--text-secondary);
-    display: -webkit-box;
-    -webkit-line-clamp: 8;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Removido el corte de líneas para mostrar resumen completo */
 }
 
 .noticia-etiquetas {
@@ -588,9 +584,11 @@ body {
 
 /* Footer */
 .footer {
-    background: var(--primary-color);
+    background: #2d3748;
     color: white;
     padding: 3rem 0 1rem;
+    position: relative;
+    z-index: 1;
 }
 
 .footer-clean-grid {
@@ -658,4 +656,204 @@ body {
         flex-direction: column;
         text-align: center;
     }
+}
+
+/* ========================================
+   ESTILOS DEL WIDGET DE CHAT
+   ======================================== */
+
+/* Chat Widget Styles */
+.rj-chat-bubble {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 9999;
+  background: #1a365d;
+  color: #fff;
+  border-radius: 50px;
+  box-shadow: 0 8px 32px rgba(44,62,80,0.18);
+  border: 3px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 56px;
+  height: 56px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background 0.2s, transform 0.2s;
+  animation: rj-bounce-in 0.7s cubic-bezier(.68,-0.55,.27,1.55);
+}
+
+.rj-chat-bubble:hover {
+  box-shadow: 0 12px 36px rgba(44,62,80,0.22);
+  background: #223e6d;
+  transform: scale(1.08);
+}
+
+@keyframes rj-bounce-in {
+  0% { transform: scale(0.7); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.rj-chat-bubble .rj-chat-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.rj-chat-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: #ff3b3b;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  box-shadow: 0 2px 8px rgba(44,62,80,0.18);
+  display: none;
+}
+
+.rj-chat-modal {
+  position: fixed;
+  right: 24px;
+  bottom: 100px;
+  width: 350px;
+  max-width: 95vw;
+  height: 420px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(44,62,80,0.18);
+  border: 1.5px solid #e5e7eb;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+@media (max-width: 500px) {
+  .rj-chat-modal {
+    right: 2vw;
+    width: 96vw;
+    height: 60vh;
+    min-width: 0;
+    border-radius: 12px;
+    padding: 0;
+  }
+  .rj-chat-bubble {
+    right: 2vw;
+    bottom: 2vw;
+    font-size: 1rem;
+    height: 48px;
+    width: 48px;
+    padding: 0;
+  }
+}
+
+.rj-chat-close {
+  background: none;
+  border: none;
+  color: #bbb;
+  font-size: 1.3rem;
+  cursor: pointer;
+  margin-left: auto;
+  margin-right: 6px;
+  margin-top: 6px;
+  transition: color 0.2s;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+  padding: 2px 6px;
+  border-radius: 50%;
+}
+
+.rj-chat-close:hover {
+  color: #23272f;
+  background: #f2f2f2;
+}
+
+.rj-chat-body {
+  flex: 1;
+  background: #fff;
+  padding: 18px 12px 12px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.rj-chat-msg {
+  max-width: 85%;
+  padding: 10px 16px;
+  border-radius: 16px;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(44,62,80,0.06);
+  margin-bottom: 2px;
+}
+
+.rj-chat-msg.user {
+  align-self: flex-end;
+  background: #e2fbe6;
+  color: #23272f;
+  border-bottom-right-radius: 4px;
+}
+
+.rj-chat-msg.assistant {
+  align-self: flex-start;
+  background: #fff;
+  color: #23272f;
+  border-bottom-left-radius: 4px;
+}
+
+.rj-chat-footer {
+  padding: 12px 14px 14px 14px;
+  background: #fff;
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.rj-chat-input {
+  flex: 1;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+}
+
+.rj-chat-input:focus {
+  border-color: #1a365d;
+}
+
+.rj-chat-send {
+  background: #1a365d;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rj-chat-send:disabled {
+  background: #b2e9c7;
+  cursor: not-allowed;
 } 
