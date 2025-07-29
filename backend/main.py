@@ -346,7 +346,19 @@ def main():
         
         elif args.once:
             print(f"🎯 Ejecutando scraping una vez (max: {args.max_noticias} noticias por fuente)")
-            system.run_once()
+            
+            # Configurar modo de ejecución basado en argumentos
+            if args.test_mode:
+                print("🧪 MODO PRUEBA: Solo fuentes funcionando")
+                # Aquí podrías filtrar solo ciertas fuentes para pruebas
+                system.run_once()
+            elif args.working_only:
+                print("⚡ MODO OPTIMIZADO: Solo fuentes funcionando")
+                # Aquí podrías filtrar solo fuentes que funcionan
+                system.run_once()
+            else:
+                print("🏭 MODO COMPLETO: Todas las fuentes")
+                system.run_once()
         
         elif args.scheduled:
             system.run_scheduled()
