@@ -5,6 +5,7 @@ Scraper para la Contraloría General de la República de Chile
 
 import sys
 import os
+import requests
 from typing import List, Dict, Optional
 from datetime import datetime, timezone
 from bs4 import BeautifulSoup
@@ -31,6 +32,19 @@ class ContraloriaScraper(BaseScraper):
         self.base_url = "https://www.contraloria.cl"
         self.noticias_url = "https://www.contraloria.cl/portalweb/web/cgr/noticias"
         self.version_scraper = "1.0"
+        
+        # Configurar credenciales de Supabase
+        from dotenv import load_dotenv
+        import os
+        
+        # Cargar variables de entorno
+        load_dotenv('../../../../APIS_Y_CREDENCIALES.env')
+        
+        self.supabase_url = os.getenv('SUPABASE_URL', 'https://qfomiierchksyfhxoukj.supabase.co')
+        self.supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        
+        if not self.supabase_key:
+            print("⚠️  Advertencia: No se encontró SUPABASE_SERVICE_ROLE_KEY")
         
         # Headers específicos para Contraloría
         self.session.headers.update({
@@ -242,7 +256,7 @@ class ContraloriaScraper(BaseScraper):
             if fecha_str:
                 fecha = self._parse_fecha_contraloria(fecha_str)
             else:
-                fecha = self._extract_fecha_contraloria(soup)
+                fecha = self._extract_fecha_universalcontraloria(soup)
             
             if not fecha:
                 fecha = datetime.now(timezone.utc)
@@ -401,6 +415,148 @@ class ContraloriaScraper(BaseScraper):
         
         return info
     
+
+
+    def verificar_noticia_existente(self, url: str) -> Optional[Dict]:
+        """Verificar si una noticia ya existe por URL"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}'
+            }
+            
+            response = requests.get(
+                f'{self.supabase_url}/rest/v1/noticias_juridicas?select=*&url_origen=eq.{url}&limit=1',
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                noticias = response.json()
+                return noticias[0] if noticias else None
+            else:
+                self._log_warning(f"Error verificando noticia: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            self._log_warning(f"Error en verificación: {e}")
+            return None
+
+    def actualizar_noticia_existente(self, noticia_id: str, datos_nuevos: Dict) -> bool:
+        """Actualizar una noticia existente"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            }
+            
+            response = requests.patch(
+                f'{self.supabase_url}/rest/v1/noticias_juridicas?id=eq.{noticia_id}',
+                headers=headers,
+                json=datos_nuevos
+            )
+            
+            if response.status_code == 204:
+                self._log_info(f"Noticia {noticia_id} actualizada correctamente")
+                return True
+            else:
+                self._log_warning(f"Error actualizando noticia: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            self._log_warning(f"Error en actualización: {e}")
+            return False
+
+    def insertar_noticia_nueva(self, datos: Dict) -> bool:
+        """Insertar una nueva noticia con manejo de duplicados"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            }
+            
+            response = requests.post(
+                f'{self.supabase_url}/rest/v1/noticias_juridicas',
+                headers=headers,
+                json=datos
+            )
+            
+            if response.status_code == 201:
+                self._log_success("Nueva noticia insertada correctamente")
+                return True
+            elif response.status_code == 409:
+                self._log_warning("Noticia duplicada detectada (409)")
+                return False
+            else:
+                self._log_error(f"Error insertando noticia: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            self._log_error(f"Error en inserción: {e}")
+            return False
+
+    def procesar_noticia_contraloria(self, noticia_data: Dict) -> bool:
+        """Procesar una noticia de Contraloría con manejo de duplicados"""
+        try:
+            # Extraer datos de la noticia
+            titulo = noticia_data.get('titulo', '')
+            contenido = noticia_data.get('cuerpo_completo', '')  # Cambiar de 'contenido' a 'cuerpo_completo'
+            url = noticia_data.get('url_origen', '')
+            fecha = noticia_data.get('fecha_publicacion', '')
+            
+            if not titulo or not url:
+                self._log_warning("Datos incompletos de noticia")
+                return False
+            
+            # Generar hash único
+            hash_contenido = self.generar_hash_contenido(titulo, contenido, url)
+            
+            # Verificar si la noticia ya existe
+            noticia_existente = self.verificar_noticia_existente(url)
+            
+            if noticia_existente:
+                self._log_info(f"Noticia existente encontrada: {titulo[:50]}...")
+                
+                # Preparar datos para actualización
+                datos_actualizacion = {
+                    'titulo': titulo,
+                    'cuerpo_completo': contenido,  # Cambiar de 'contenido' a 'cuerpo_completo'
+                    'hash_contenido': hash_contenido,
+                    'fecha_actualizacion': datetime.now().isoformat()
+                }
+                
+                # Actualizar noticia existente
+                return self.actualizar_noticia_existente(noticia_existente['id'], datos_actualizacion)
+            else:
+                self._log_info(f"Nueva noticia: {titulo[:50]}...")
+                
+                # Preparar datos para inserción
+                datos_insercion = {
+                    'titulo': titulo,
+                    'cuerpo_completo': contenido,  # Cambiar de 'contenido' a 'cuerpo_completo'
+                    'url_origen': url,
+                    'fuente': 'contraloria',
+                    'fecha_publicacion': fecha,
+                    'hash_contenido': hash_contenido,
+                    'fecha_actualizacion': datetime.now().isoformat()
+                }
+                
+                # Insertar nueva noticia
+                return self.insertar_noticia_nueva(datos_insercion)
+                
+        except Exception as e:
+            self._log_error(f"Error procesando noticia: {e}")
+            return False
+
+    def generar_hash_contenido(self, titulo: str, contenido: str, url: str) -> str:
+        """Generar hash único para el contenido"""
+        import hashlib
+        contenido_para_hash = f"{titulo}|{contenido[:200]}|{url}"
+        return hashlib.md5(contenido_para_hash.encode('utf-8')).hexdigest()
+
     def scrape_noticias_recientes(self, max_noticias: int = 10) -> List[NoticiaEstandarizada]:
         """Scrapear noticias recientes completas de la Contraloría"""
         self._log_info("Iniciando scraping de la Contraloría General de la República...")

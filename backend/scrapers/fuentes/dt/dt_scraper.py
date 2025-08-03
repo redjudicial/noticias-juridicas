@@ -56,28 +56,60 @@ class DTScraper(BaseScraper):
             
             noticias = []
             
-            # Buscar noticias en la estructura de la DT
-            selectores_noticias = [
-                '.noticia',
-                '.news-item',
-                '.post',
-                'article',
-                '.content-item',
-                '.comunicado',
-                'a[href*="/noticia"]',
-                'a[href*="/comunicado"]',
-                'a[href*="/portal"]'
-            ]
+            # Buscar noticias en la estructura específica de DT
+            elementos_noticias = soup.select('.recuadro')
             
-            elementos_noticias = []
-            for selector in selectores_noticias:
-                elementos = soup.select(selector)
-                if elementos:
-                    elementos_noticias.extend(elementos[:max_noticias])
-                    break
-            
-            # Si no encuentra elementos específicos, buscar enlaces relevantes
             if not elementos_noticias:
+                # Selectores alternativos
+                selectores_noticias = [
+                    '.noticia',
+                    '.news-item',
+                    '.post',
+                    'article',
+                    '.content-item'
+                ]
+                
+                for selector in selectores_noticias:
+                    elementos = soup.select(selector)
+                    if elementos:
+                        elementos_noticias.extend(elementos[:max_noticias])
+                        break
+            
+            # Procesar elementos encontrados
+            for elemento in elementos_noticias:
+                # Buscar enlace principal en h3 > a
+                titulo_elem = elemento.find('h3', class_='titulo')
+                
+                if titulo_elem:
+                    enlace_elem = titulo_elem.find('a', href=True)
+                    
+                    if enlace_elem:
+                        titulo = enlace_elem.get_text(strip=True)
+                        href = enlace_elem.get('href')
+                        
+                        # Corregir URLs de DT - agregar el path correcto
+                        if href.startswith('w3-article-'):
+                            url_completa = f"https://www.dt.gob.cl/portal/1627/{href}"
+                        else:
+                            url_completa = urljoin(self.base_url, href)
+                        
+                        # Buscar fecha en el elemento .fecha
+                        fecha_elem = elemento.find('p', class_='fecha')
+                        if fecha_elem:
+                            fecha_texto = fecha_elem.get_text(strip=True)
+                            fecha = self._extraer_fecha_texto(fecha_texto)
+                        else:
+                            fecha = None
+                        
+                        if titulo and len(titulo) > 10:  # Filtrar títulos muy cortos
+                            noticias.append({
+                                'titulo': titulo,
+                                'url': url_completa,
+                                'fecha': fecha.strftime('%d/%m/%Y') if fecha else datetime.now().strftime('%d/%m/%Y')
+                            })
+            
+            # Si no encuentra noticias con la estructura específica, usar método fallback
+            if not noticias:
                 enlaces = soup.find_all('a', href=True)
                 for enlace in enlaces:
                     href = enlace.get('href')
@@ -89,7 +121,12 @@ class DTScraper(BaseScraper):
                             'inspección', 'fiscalización', 'sindicato', 'contrato'
                         ])):
                         
-                        url_completa = urljoin(self.base_url, href)
+                        # Corregir URLs de DT - agregar el path correcto
+                        if href.startswith('w3-article-'):
+                            url_completa = f"https://www.dt.gob.cl/portal/1627/{href}"
+                        else:
+                            url_completa = urljoin(self.base_url, href)
+                            
                         fecha_elem = enlace.find_parent().find(['time', '.fecha', '.date'])
                         fecha = self._extraer_fecha_texto(fecha_elem.get_text() if fecha_elem else "")
                         
@@ -101,28 +138,6 @@ class DTScraper(BaseScraper):
                         
                         if len(noticias) >= max_noticias:
                             break
-            else:
-                # Procesar elementos encontrados
-                for elemento in elementos_noticias:
-                    titulo_elem = elemento.find(['h1', 'h2', 'h3', 'h4', '.title', '.titulo'])
-                    enlace_elem = elemento.find('a', href=True)
-                    
-                    if not titulo_elem and enlace_elem:
-                        titulo_elem = enlace_elem
-                    
-                    if titulo_elem and enlace_elem:
-                        titulo = titulo_elem.get_text(strip=True)
-                        href = enlace_elem.get('href')
-                        url_completa = urljoin(self.base_url, href)
-                        
-                        fecha_elem = elemento.find(['time', '.fecha', '.date'])
-                        fecha = self._extraer_fecha_texto(fecha_elem.get_text() if fecha_elem else "")
-                        
-                        noticias.append({
-                            'titulo': titulo,
-                            'url': url_completa,
-                            'fecha': fecha.strftime('%d/%m/%Y') if fecha else datetime.now().strftime('%d/%m/%Y')
-                        })
             
             print(f"✅ Encontradas {len(noticias)} noticias de la DT")
             return noticias
@@ -136,11 +151,12 @@ class DTScraper(BaseScraper):
         if not texto:
             return None
             
-        # Patrones de fecha comunes
+        # Patrones de fecha comunes (incluyendo formato DT)
         patrones = [
             r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',
             r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})',
-            r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})'
+            r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})',
+            r'(\d{1,2})-(\w+)-(\d{4})'  # Formato: "24-jul-2025"
         ]
         
         for patron in patrones:
@@ -155,6 +171,14 @@ class DTScraper(BaseScraper):
                             'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
                         }
                         mes = meses.get(mes_nombre.lower(), 1)
+                        return datetime(int(año), mes, int(dia), tzinfo=timezone.utc)
+                    elif '-' in patron and '\\w+' in patron:  # Formato "dd-mes-yyyy"
+                        dia, mes_abrev, año = match.groups()
+                        meses_abrev = {
+                            'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
+                            'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12
+                        }
+                        mes = meses_abrev.get(mes_abrev.lower(), 1)
                         return datetime(int(año), mes, int(dia), tzinfo=timezone.utc)
                     else:
                         grupos = match.groups()
@@ -199,7 +223,7 @@ class DTScraper(BaseScraper):
                 fecha_publicacion=fecha_publicacion,
                 fuente="dt",
                 url_origen=url,
-                categoria=Categoria.NORMATIVA,  # DT maneja normativas laborales
+                categoria=Categoria.LABORAL,  # DT maneja normativas laborales
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,
                 fuente_nombre_completo="Dirección del Trabajo",

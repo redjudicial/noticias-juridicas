@@ -37,6 +37,10 @@ from backend.scrapers.fuentes import (
     DTScraper
 )
 
+# Importar scrapers adicionales
+from backend.scrapers.fuentes.tdpi.tdpi_scraper import TDPScraper as TDPIScraper
+from backend.scrapers.fuentes.ministerio_justicia.ministerio_justicia_scraper import MinisterioJusticiaScraper
+
 class NoticiasJuridicasSystem:
     """Sistema principal de noticias jurídicas"""
     
@@ -88,6 +92,12 @@ class NoticiasJuridicasSystem:
             ),
             'dt': DTScraper(
                 openai_api_key=self.config.get('openai_api_key')
+            ),
+            'tdpi': TDPIScraper(
+                openai_api_key=self.config.get('openai_api_key')
+            ),
+            'ministerio_justicia': MinisterioJusticiaScraper(
+                openai_api_key=self.config.get('openai_api_key')
             )
         }
         
@@ -129,12 +139,27 @@ class NoticiasJuridicasSystem:
                 # Procesar cada noticia
                 for noticia in noticias:
                     try:
-                        resultado = self._procesar_noticia(noticia)
-                        
-                        if resultado['tipo'] == 'nueva':
-                            total_noticias_nuevas += 1
-                        elif resultado['tipo'] == 'actualizada':
-                            total_noticias_actualizadas += 1
+                        # Usar método específico para Contraloría
+                        if fuente_nombre == 'contraloria':
+                            # Convertir NoticiaEstandarizada a diccionario para el método específico
+                            if hasattr(noticia, 'to_dict'):
+                                noticia_dict = noticia.to_dict()
+                            else:
+                                noticia_dict = noticia
+                            
+                            resultado = scraper.procesar_noticia_contraloria(noticia_dict)
+                            if resultado:
+                                total_noticias_nuevas += 1
+                            else:
+                                total_noticias_actualizadas += 1
+                        else:
+                            # Usar método genérico para otras fuentes
+                            resultado = self._procesar_noticia(noticia)
+                            
+                            if resultado['tipo'] == 'nueva':
+                                total_noticias_nuevas += 1
+                            elif resultado['tipo'] == 'actualizada':
+                                total_noticias_actualizadas += 1
                             
                     except Exception as e:
                         error_msg = f"Error procesando noticia de {fuente_nombre}: {e}"
@@ -183,7 +208,11 @@ class NoticiasJuridicasSystem:
             fecha_existente = datetime.fromisoformat(fecha_actualizacion.replace('Z', '+00:00'))
         else:
             fecha_existente = datetime.fromisoformat(noticia_existente['fecha_publicacion'].replace('Z', '+00:00'))
+        
+        # Asegurar que ambas fechas sean offset-naive para comparación
+        fecha_existente = fecha_existente.replace(tzinfo=None)
         fecha_nueva = noticia_nueva.fecha_actualizacion or noticia_nueva.fecha_publicacion
+        fecha_nueva = fecha_nueva.replace(tzinfo=None) if hasattr(fecha_nueva, 'replace') else fecha_nueva
         
         return fecha_nueva > fecha_existente
     

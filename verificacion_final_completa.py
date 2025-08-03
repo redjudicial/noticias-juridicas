@@ -1,156 +1,278 @@
 #!/usr/bin/env python3
 """
-Verificación final completa de todos los problemas solucionados
+Verificación final completa del sistema de noticias
+Comprueba que todo esté funcionando correctamente
 """
 
 import os
+import sys
 import requests
-import re
+import subprocess
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv('APIS_Y_CREDENCIALES.env')
 
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
+# Configuración de Supabase
+SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://qfomiierchksyfhxoukj.supabase.co')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-def verificar_problemas_solucionados():
-    """Verificar que todos los problemas están solucionados"""
+def verificar_base_datos():
+    """Verificar estado de la base de datos"""
+    print("🗄️ **VERIFICACIÓN DE BASE DE DATOS**")
+    print("-" * 50)
     
-    headers = {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': f'Bearer {SUPABASE_ANON_KEY}'
-    }
-    
-    print("🎯 **VERIFICACIÓN FINAL - PROBLEMAS SOLUCIONADOS**")
-    print("=" * 60)
-    
-    # 1. Verificar URLs duplicadas
-    print("\n🔗 **1. VERIFICACIÓN DE URLs DUPLICADAS**")
     try:
+        headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}'
+        }
+        
+        # Obtener todas las noticias
         response = requests.get(
-            f'{SUPABASE_URL}/rest/v1/noticias_juridicas?select=url_origen&order=url_origen',
+            f'{SUPABASE_URL}/rest/v1/noticias_juridicas?select=*&order=fecha_publicacion.desc',
             headers=headers
         )
         
         if response.status_code == 200:
             noticias = response.json()
-            urls = [n.get('url_origen') for n in noticias if n.get('url_origen')]
-            urls_unicas = len(set(urls))
-            duplicadas = len(urls) - urls_unicas
+            print(f"✅ Conexión exitosa")
+            print(f"📊 Total noticias: {len(noticias)}")
             
-            print(f"   📊 Total URLs: {len(urls)}")
-            print(f"   📊 URLs únicas: {urls_unicas}")
-            print(f"   📊 URLs duplicadas: {duplicadas}")
-            
-            if duplicadas == 0:
-                print("   ✅ No hay URLs duplicadas")
-            else:
-                print(f"   ⚠️  Hay {duplicadas} URLs duplicadas - Ejecutar SQL")
-                
-        else:
-            print(f"   ❌ Error: {response.status_code}")
-            
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
-    
-    # 2. Verificar títulos con fechas
-    print("\n📰 **2. VERIFICACIÓN DE TÍTULOS CON FECHAS**")
-    try:
-        response = requests.get(
-            f'{SUPABASE_URL}/rest/v1/noticias_juridicas?select=titulo,fuente&order=fecha_publicacion.desc&limit=20',
-            headers=headers
-        )
-        
-        if response.status_code == 200:
-            noticias = response.json()
-            titulos_con_fecha = 0
+            # Verificar noticias recientes
+            fecha_limite = datetime.now().replace(tzinfo=None) - timedelta(hours=24)
+            recientes = 0
             
             for noticia in noticias:
-                titulo = noticia.get('titulo', '')
-                fuente = noticia.get('fuente', '')
-                
-                # Buscar patrones de fecha al final del título
-                patrones_fecha = [
-                    r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}$',  # 26-07-2025 04:07
-                    r'\d{2}-\d{2}-\d{4}\s+\d{1,2}:\d{2}$',  # 26-07-2025 4:07
-                    r'\d{1,2}-\d{1,2}-\d{4}\s+\d{2}:\d{2}$',  # 6-07-2025 04:07
-                    r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}$',  # 6-7-2025 4:07
-                ]
-                
-                for patron in patrones_fecha:
-                    if re.search(patron, titulo):
-                        titulos_con_fecha += 1
-                        print(f"   ⚠️  Título con fecha: {titulo[:60]}... ({fuente})")
-                        break
+                fecha = datetime.fromisoformat(noticia['fecha_publicacion'].replace('Z', '+00:00')).replace(tzinfo=None)
+                if fecha > fecha_limite:
+                    recientes += 1
             
-            if titulos_con_fecha == 0:
-                print("   ✅ No hay títulos con fechas")
+            print(f"📈 Noticias últimas 24h: {recientes}")
+            
+            if recientes > 0:
+                print("✅ Base de datos activa con noticias recientes")
+                return True
             else:
-                print(f"   ⚠️  Hay {titulos_con_fecha} títulos con fechas")
-                
+                print("⚠️ No hay noticias recientes")
+                return False
         else:
-            print(f"   ❌ Error: {response.status_code}")
+            print(f"❌ Error de conexión: {response.status_code}")
+            return False
             
     except Exception as e:
-        print(f"   ❌ Error: {e}")
+        print(f"❌ Error verificando base de datos: {e}")
+        return False
+
+def verificar_scrapers():
+    """Verificar que todos los scrapers funcionan"""
+    print("\n🔧 **VERIFICACIÓN DE SCRAPERS**")
+    print("-" * 50)
     
-    # 3. Verificar fechas de publicación
-    print("\n📅 **3. VERIFICACIÓN DE FECHAS DE PUBLICACIÓN**")
-    try:
-        response = requests.get(
-            f'{SUPABASE_URL}/rest/v1/noticias_juridicas?select=fecha_publicacion,fecha_actualizacion,fuente&order=fecha_publicacion.desc&limit=10',
-            headers=headers
-        )
+    scrapers = [
+        'poder_judicial', 'contraloria', 'cde', 'tdlc', '1ta', '3ta',
+        'tribunal_ambiental', 'sii', 'tta', 'inapi', 'dt', 'tdpi', 'ministerio_justicia'
+    ]
+    
+    resultados = {}
+    
+    for scraper in scrapers:
+        archivo_test = f"test_{scraper}_scraper.py"
         
-        if response.status_code == 200:
-            noticias = response.json()
-            
-            for i, noticia in enumerate(noticias, 1):
-                fecha_pub = noticia.get('fecha_publicacion', 'N/A')
-                fecha_act = noticia.get('fecha_actualizacion', 'N/A')
-                fuente = noticia.get('fuente', 'N/A')
+        if os.path.exists(archivo_test):
+            try:
+                resultado = subprocess.run(
+                    ['python3', archivo_test],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
                 
-                print(f"   {i}. {fuente}: {fecha_pub[:10]} (pub) / {fecha_act[:10] if fecha_act != 'N/A' else 'N/A'} (act)")
-            
-            print("   ✅ Fechas verificadas")
+                resultados[scraper] = resultado.returncode == 0
                 
+                if resultados[scraper]:
+                    print(f"✅ {scraper}: Funciona")
+                else:
+                    print(f"❌ {scraper}: Error")
+                    
+            except subprocess.TimeoutExpired:
+                print(f"⏰ {scraper}: Timeout")
+                resultados[scraper] = False
+            except Exception as e:
+                print(f"❌ {scraper}: Error - {e}")
+                resultados[scraper] = False
         else:
-            print(f"   ❌ Error: {response.status_code}")
-            
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
+            print(f"⚠️ {scraper}: Sin test disponible")
+            resultados[scraper] = False
     
-    # 4. Verificar resúmenes IA
-    print("\n🤖 **4. VERIFICACIÓN DE RESÚMENES IA**")
+    return resultados
+
+def verificar_github_actions():
+    """Verificar configuración de GitHub Actions"""
+    print("\n🤖 **VERIFICACIÓN DE GITHUB ACTIONS**")
+    print("-" * 50)
+    
+    workflow_file = ".github/workflows/scraping_automatico_optimizado.yml"
+    
+    if not os.path.exists(workflow_file):
+        print("❌ Archivo de workflow no encontrado")
+        return False
+    
     try:
-        response = requests.get(
-            f'{SUPABASE_URL}/rest/v1/noticias_juridicas?select=resumen_ejecutivo,palabras_clave&order=fecha_publicacion.desc&limit=5',
-            headers=headers
-        )
+        with open(workflow_file, 'r') as f:
+            content = f.read()
         
-        if response.status_code == 200:
-            noticias = response.json()
-            resumenes_con_ia = sum(1 for n in noticias if n.get('resumen_ejecutivo'))
-            palabras_clave = sum(1 for n in noticias if n.get('palabras_clave'))
-            
-            print(f"   📊 Resúmenes IA: {resumenes_con_ia}/{len(noticias)}")
-            print(f"   📊 Palabras clave: {palabras_clave}/{len(noticias)}")
-            
-            if resumenes_con_ia == len(noticias):
-                print("   ✅ Todos los resúmenes IA están generados")
-            else:
-                print(f"   ⚠️  Faltan {len(noticias) - resumenes_con_ia} resúmenes IA")
-                
+        # Verificar configuración 24/7
+        if "cron: '0 * * * *'" in content:
+            print("✅ Configuración 24/7 cada hora correcta")
+            return True
         else:
-            print(f"   ❌ Error: {response.status_code}")
+            print("❌ Configuración de cron incorrecta")
+            return False
             
     except Exception as e:
-        print(f"   ❌ Error: {e}")
+        print(f"❌ Error leyendo workflow: {e}")
+        return False
+
+def verificar_frontend():
+    """Verificar estado del frontend"""
+    print("\n🌐 **VERIFICACIÓN DEL FRONTEND**")
+    print("-" * 50)
     
-    print("\n" + "=" * 60)
-    print("🎉 **VERIFICACIÓN COMPLETADA**")
-    print("📋 Próximo paso: Ejecutar SQL para eliminar URLs duplicadas")
+    archivos_requeridos = [
+        'frontend/index.html',
+        'frontend/js/noticias.js',
+        'frontend/css/noticias.css'
+    ]
+    
+    archivos_ok = 0
+    
+    for archivo in archivos_requeridos:
+        if os.path.exists(archivo):
+            print(f"✅ {archivo}: Encontrado")
+            archivos_ok += 1
+        else:
+            print(f"❌ {archivo}: No encontrado")
+    
+    # Verificar actualización automática
+    if os.path.exists('frontend/js/noticias.js'):
+        with open('frontend/js/noticias.js', 'r') as f:
+            content = f.read()
+        
+        if 'setInterval' in content and 'cargarNoticias' in content:
+            print("✅ Actualización automática configurada")
+            archivos_ok += 1
+        else:
+            print("❌ Actualización automática no configurada")
+    
+    return archivos_ok >= len(archivos_requeridos)
+
+def verificar_scraping_completo():
+    """Verificar que el scraping completo funciona"""
+    print("\n🚀 **VERIFICACIÓN DE SCRAPING COMPLETO**")
+    print("-" * 50)
+    
+    try:
+        resultado = subprocess.run([
+            'python3', 'backend/main.py', '--once', '--max-noticias', '2'
+        ], capture_output=True, text=True, timeout=180)
+        
+        if resultado.returncode == 0:
+            print("✅ Scraping completo funciona correctamente")
+            return True
+        else:
+            print("❌ Error en scraping completo")
+            print(f"Error: {resultado.stderr}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print("⏰ Timeout en scraping completo")
+        return False
+    except Exception as e:
+        print(f"❌ Error ejecutando scraping: {e}")
+        return False
+
+def generar_reporte_final():
+    """Generar reporte final del sistema"""
+    print("\n📊 **REPORTE FINAL DEL SISTEMA**")
+    print("=" * 60)
+    
+    # Ejecutar verificaciones
+    db_ok = verificar_base_datos()
+    scrapers_resultados = verificar_scrapers()
+    github_ok = verificar_github_actions()
+    frontend_ok = verificar_frontend()
+    scraping_ok = verificar_scraping_completo()
+    
+    # Calcular métricas
+    scrapers_funcionando = sum(1 for r in scrapers_resultados.values() if r)
+    total_scrapers = len(scrapers_resultados)
+    
+    print(f"\n📈 **MÉTRICAS FINALES:**")
+    print("-" * 40)
+    print(f"Base de datos: {'✅ OK' if db_ok else '❌ ERROR'}")
+    print(f"Scrapers: {scrapers_funcionando}/{total_scrapers} funcionando")
+    print(f"GitHub Actions: {'✅ OK' if github_ok else '❌ ERROR'}")
+    print(f"Frontend: {'✅ OK' if frontend_ok else '❌ ERROR'}")
+    print(f"Scraping completo: {'✅ OK' if scraping_ok else '❌ ERROR'}")
+    
+    # Calcular score general
+    score = 0
+    total_checks = 5
+    
+    if db_ok: score += 1
+    if scrapers_funcionando >= total_scrapers * 0.8: score += 1  # 80% de scrapers funcionando
+    if github_ok: score += 1
+    if frontend_ok: score += 1
+    if scraping_ok: score += 1
+    
+    porcentaje = (score / total_checks) * 100
+    
+    print(f"\n🎯 **SCORE GENERAL: {porcentaje:.1f}%**")
+    
+    if porcentaje >= 90:
+        print("🏆 ¡EXCELENTE! El sistema está funcionando perfectamente")
+    elif porcentaje >= 70:
+        print("✅ BUENO - El sistema funciona bien con algunas mejoras menores")
+    elif porcentaje >= 50:
+        print("⚠️ REGULAR - El sistema necesita mejoras importantes")
+    else:
+        print("❌ CRÍTICO - El sistema necesita reparación urgente")
+    
+    # Recomendaciones
+    print(f"\n💡 **RECOMENDACIONES:**")
+    print("-" * 40)
+    
+    if not db_ok:
+        print("🔧 Reparar conexión a base de datos")
+    
+    if scrapers_funcionando < total_scrapers * 0.8:
+        print("🔧 Reparar scrapers que no funcionan")
+    
+    if not github_ok:
+        print("🔧 Corregir configuración de GitHub Actions")
+    
+    if not frontend_ok:
+        print("🔧 Reparar archivos del frontend")
+    
+    if not scraping_ok:
+        print("🔧 Corregir scraping completo")
+    
+    if porcentaje >= 90:
+        print("🎉 ¡El sistema está listo para producción!")
+
+def main():
+    """Función principal"""
+    print("🔍 **VERIFICACIÓN FINAL COMPLETA DEL SISTEMA**")
+    print("=" * 70)
+    print(f"📅 Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
+    
+    generar_reporte_final()
+    
+    print(f"\n✅ **VERIFICACIÓN COMPLETADA**")
+    print("=" * 70)
 
 if __name__ == "__main__":
-    verificar_problemas_solucionados() 
+    main() 

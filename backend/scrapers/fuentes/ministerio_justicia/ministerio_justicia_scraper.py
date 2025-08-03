@@ -17,6 +17,8 @@ from urllib.parse import urljoin, urlparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from backend.processors.content_processor import ContentProcessor, NoticiaCompleta
+from ..data_schema import NoticiaEstandarizada, Categoria, Jurisdiccion, TipoDocumento
+from ..date_extractor import date_extractor
 
 class MinisterioJusticiaScraper:
     """Scraper específico para el Ministerio de Justicia"""
@@ -45,7 +47,10 @@ class MinisterioJusticiaScraper:
             response = self.session.get(self.noticias_url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             
             # Buscar enlaces de noticias específicamente
             noticias_links = []
@@ -142,7 +147,10 @@ class MinisterioJusticiaScraper:
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             
             # Extraer información específica del Ministerio de Justicia
             noticia = self._extract_noticia_ministerio(soup, url, titulo)
@@ -164,7 +172,7 @@ class MinisterioJusticiaScraper:
             titulo_final = titulo or (titulo_elem.get_text(strip=True) if titulo_elem else "Noticia Ministerio de Justicia")
             
             # Extraer fecha
-            fecha = self._extract_fecha_ministerio(soup)
+            fecha = self._extract_fecha_ministerio(soup, url)
             
             # Extraer contenido
             contenido = self._extract_contenido_ministerio(soup)
@@ -192,23 +200,13 @@ class MinisterioJusticiaScraper:
             print(f"❌ Error extrayendo noticia del Ministerio: {e}")
             return None
     
-    def _extract_fecha_ministerio(self, soup: BeautifulSoup) -> datetime:
-        """Extraer fecha de noticia del Ministerio de Justicia"""
+    def _extract_fecha_ministerio(self, soup: BeautifulSoup, url: str = None) -> datetime:
+        """Extraer fecha de noticia del Ministerio de Justicia usando extractor universal"""
         try:
-            # Buscar fecha en diferentes formatos
-            fecha_selectors = [
-                '.fecha', '.date', '.fecha-publicacion',
-                'time', '[datetime]', '.meta .fecha',
-                '.entry-date', '.post-date'
-            ]
-            
-            for selector in fecha_selectors:
-                fecha_elem = soup.select_one(selector)
-                if fecha_elem:
-                    fecha_texto = fecha_elem.get_text(strip=True)
-                    fecha_parsed = self._parse_fecha_ministerio(fecha_texto)
-                    if fecha_parsed:
-                        return fecha_parsed
+            # Usar el extractor universal de fechas
+            fecha = date_extractor.extract_date_from_html(soup, url)
+            if fecha:
+                return fecha
             
             # Si no se encuentra, usar fecha actual
             return datetime.now(timezone.utc)
@@ -225,15 +223,16 @@ class MinisterioJusticiaScraper:
                 r'(\d{1,2})/(\d{1,2})/(\d{4})',
                 r'(\d{1,2})-(\d{1,2})-(\d{4})',
                 r'(\d{4})-(\d{1,2})-(\d{1,2})',
-                r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})'
+                r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})',
+                r'(\d{1,2})\s+de\s+(\w+)\s+del\s+(\d{4})'  # Nuevo patrón para "del 2023"
             ]
             
             for patron in patrones:
                 match = re.search(patron, fecha_texto)
                 if match:
                     if len(match.groups()) == 3:
-                        if patron == r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})':
-                            # Formato: "15 de julio de 2024"
+                        if 'de' in patron:
+                            # Formato: "15 de julio de 2024" o "24 de noviembre del 2023"
                             dia = int(match.group(1))
                             mes_texto = match.group(2).lower()
                             año = int(match.group(3))

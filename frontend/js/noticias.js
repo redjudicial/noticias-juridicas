@@ -7,6 +7,8 @@ let noticias = [];
 let noticiasFiltradas = [];
 let paginaActual = 1;
 const noticiasPorPagina = 12;
+let intervaloActualizacion = null;
+let ultimaActualizacion = null;
 
 // Elementos del DOM
 const contenedorNoticias = document.getElementById('noticias-container');
@@ -16,23 +18,88 @@ const buscador = document.getElementById('search-input');
 const paginacion = document.getElementById('paginacion');
 const loadingSpinner = document.getElementById('loading-spinner');
 const totalNoticias = document.getElementById('total-noticias');
-const ultimaActualizacion = document.getElementById('ultima-actualizacion');
+const elementoUltimaActualizacion = document.getElementById('ultima-actualizacion');
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', function() {
     cargarNoticias();
     configurarEventos();
+    iniciarActualizacionAutomatica();
 });
 
+// Iniciar actualización automática cada 5 minutos
+function iniciarActualizacionAutomatica() {
+    console.log('🔄 Iniciando actualización automática cada 5 minutos...');
+    
+    // Actualizar cada 5 minutos (300,000 ms)
+    intervaloActualizacion = setInterval(() => {
+        console.log('🔄 Actualización automática iniciada...');
+        cargarNoticias(true); // true = actualización silenciosa
+    }, 5 * 60 * 1000);
+    
+    // Mostrar indicador de actualización automática
+    mostrarIndicadorActualizacion();
+}
+
+// Mostrar indicador de actualización automática
+function mostrarIndicadorActualizacion() {
+    const indicador = document.createElement('div');
+    indicador.id = 'indicador-actualizacion';
+    indicador.innerHTML = `
+        <div class="indicador-actualizacion">
+            <i class="fas fa-sync-alt"></i>
+            <span>Actualización automática cada 5 minutos</span>
+            <span id="proxima-actualizacion"></span>
+        </div>
+    `;
+    
+    // Insertar al inicio del contenedor principal
+    const mainContent = document.querySelector('.main-content .container');
+    if (mainContent) {
+        mainContent.insertBefore(indicador, mainContent.firstChild);
+    }
+    
+    // Actualizar contador de próxima actualización
+    actualizarContadorProximaActualizacion();
+}
+
+// Actualizar contador de próxima actualización
+function actualizarContadorProximaActualizacion() {
+    const elemento = document.getElementById('proxima-actualizacion');
+    if (!elemento) return;
+    
+    const ahora = new Date();
+    const proximaActualizacion = new Date(ahora.getTime() + 5 * 60 * 1000);
+    
+    const actualizarContador = () => {
+        const tiempoRestante = proximaActualizacion - new Date();
+        if (tiempoRestante > 0) {
+            const minutos = Math.floor(tiempoRestante / 60000);
+            const segundos = Math.floor((tiempoRestante % 60000) / 1000);
+            elemento.textContent = `Próxima actualización en ${minutos}:${segundos.toString().padStart(2, '0')}`;
+        } else {
+            elemento.textContent = 'Actualizando...';
+        }
+    };
+    
+    actualizarContador();
+    setInterval(actualizarContador, 1000);
+}
+
 // Cargar noticias desde Supabase
-async function cargarNoticias() {
-    mostrarLoading(true);
+async function cargarNoticias(actualizacionSilenciosa = false) {
+    if (!actualizacionSilenciosa) {
+        mostrarLoading(true);
+    }
     
     try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/noticias_juridicas?select=*&order=fecha_publicacion.desc`, {
             headers: {
                 'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             }
         });
         
@@ -40,24 +107,74 @@ async function cargarNoticias() {
             throw new Error('Error al cargar noticias');
         }
         
-        noticias = await response.json();
+        const nuevasNoticias = await response.json();
+        
+        // Verificar si hay nuevas noticias
+        const hayNuevasNoticias = verificarNuevasNoticias(nuevasNoticias);
+        
+        noticias = nuevasNoticias;
         noticiasFiltradas = [...noticias];
         
-        // Aplicar ordenamiento aleatorio por defecto para mostrar variedad de fuentes
-        if (ordenSelect) {
-            ordenSelect.value = 'aleatorio';
-        }
+        // Aplicar ordenamiento por defecto (más recientes primero)
         aplicarOrdenamiento();
         
         actualizarEstadisticas();
         mostrarNoticias();
         
+        // Mostrar notificación si hay nuevas noticias
+        if (hayNuevasNoticias && actualizacionSilenciosa) {
+            mostrarNotificacionNuevasNoticias();
+        }
+        
+        // Actualizar timestamp de última actualización
+        ultimaActualizacion = new Date();
+        
     } catch (error) {
         console.error('Error cargando noticias:', error);
-        mostrarError('Error al cargar las noticias. Por favor, intente nuevamente.');
+        if (!actualizacionSilenciosa) {
+            mostrarError('Error al cargar las noticias. Por favor, intente nuevamente.');
+        }
     } finally {
-        mostrarLoading(false);
+        if (!actualizacionSilenciosa) {
+            mostrarLoading(false);
+        }
     }
+}
+
+// Verificar si hay nuevas noticias
+function verificarNuevasNoticias(nuevasNoticias) {
+    if (noticias.length === 0) return false;
+    
+    // Comparar la primera noticia (más reciente)
+    const noticiaActual = noticias[0];
+    const noticiaNueva = nuevasNoticias[0];
+    
+    return noticiaActual.id !== noticiaNueva.id;
+}
+
+// Mostrar notificación de nuevas noticias
+function mostrarNotificacionNuevasNoticias() {
+    const notificacion = document.createElement('div');
+    notificacion.className = 'notificacion-nuevas-noticias';
+    notificacion.innerHTML = `
+        <div class="notificacion-contenido">
+            <i class="fas fa-bell"></i>
+            <span>¡Nuevas noticias disponibles!</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="btn-cerrar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    // Insertar al inicio del body
+    document.body.appendChild(notificacion);
+    
+    // Remover automáticamente después de 5 segundos
+    setTimeout(() => {
+        if (notificacion.parentElement) {
+            notificacion.remove();
+        }
+    }, 5000);
 }
 
 // Configurar event listeners
@@ -114,7 +231,35 @@ function aplicarOrdenamiento() {
     noticiasFiltradas.sort((a, b) => {
         switch (orden) {
             case 'fecha_desc':
-                return new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
+                // Ordenar por fecha descendente, pero Tribunal Ambiental al final
+                const fechaA = new Date(a.fecha_publicacion);
+                const fechaB = new Date(b.fecha_publicacion);
+                
+                // Debug: Log para verificar el ordenamiento
+                console.log(`Comparando: ${a.fuente} vs ${b.fuente}`);
+                
+                // Si ambas son del Tribunal Ambiental, ordenar por fecha
+                if (a.fuente === 'tribunal_ambiental' && b.fuente === 'tribunal_ambiental') {
+                    console.log('Ambas son tribunal_ambiental, ordenando por fecha');
+                    return fechaB - fechaA;
+                }
+                
+                // Si solo A es del Tribunal Ambiental, ponerla al final
+                if (a.fuente === 'tribunal_ambiental') {
+                    console.log('A es tribunal_ambiental, poniendo al final');
+                    return 1;
+                }
+                
+                // Si solo B es del Tribunal Ambiental, ponerla al final
+                if (b.fuente === 'tribunal_ambiental') {
+                    console.log('B es tribunal_ambiental, poniendo al final');
+                    return -1;
+                }
+                
+                // Para el resto, ordenar por fecha descendente
+                console.log('Ordenando por fecha descendente');
+                return fechaB - fechaA;
+                
             case 'fecha_asc':
                 return new Date(a.fecha_publicacion) - new Date(b.fecha_publicacion);
             case 'titulo_asc':
@@ -125,9 +270,6 @@ function aplicarOrdenamiento() {
                 return a.fuente.localeCompare(b.fuente);
             case 'relevancia_desc':
                 return (b.relevancia_juridica || 0) - (a.relevancia_juridica || 0);
-            case 'aleatorio':
-                // Ordenamiento aleatorio para mostrar variedad de fuentes
-                return Math.random() - 0.5;
             default:
                 return new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
         }
@@ -296,8 +438,8 @@ function actualizarEstadisticas() {
     if (totalNoticias) {
         totalNoticias.textContent = filtradas;
     }
-    if (ultimaActualizacion) {
-        ultimaActualizacion.textContent = `Última actualización: ${new Date().toLocaleTimeString('es-CL')}`;
+    if (elementoUltimaActualizacion) {
+        elementoUltimaActualizacion.textContent = `Última actualización: ${new Date().toLocaleTimeString('es-CL')}`;
     }
 }
 

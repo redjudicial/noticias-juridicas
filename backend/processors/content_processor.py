@@ -108,7 +108,7 @@ class ContentProcessor:
     
     def generar_resumen_ejecutivo(self, titulo: str, contenido: str, fuente: str) -> Dict[str, str]:
         """
-        Genera un resumen ejecutivo completo con IA
+        Genera un resumen ejecutivo usando solo el primer párrafo (200 caracteres)
         
         Returns:
             Dict con 'titulo_resumen', 'subtitulo', 'resumen_contenido', 'puntos_clave'
@@ -123,37 +123,8 @@ class ContentProcessor:
             if cache_key in self.resumen_cache:
                 return self.resumen_cache[cache_key]
             
-            if not self.openai_api_key:
-                return self._generar_resumen_manual(titulo_limpio, contenido_limpio, fuente)
-            
-            # Preparar prompt para IA
-            prompt = self._crear_prompt_resumen(titulo_limpio, contenido_limpio, fuente)
-            
-            # Llamar a OpenAI con la nueva API
-            from openai import OpenAI
-            client = OpenAI(api_key=self.openai_api_key)
-            
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Eres un experto en derecho chileno. Crea resúmenes ejecutivos cortos y precisos."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=300,
-                temperature=0.2
-            )
-            
-            # Procesar respuesta
-            respuesta_ia = response.choices[0].message.content
-            
-            # Parsear la respuesta estructurada
-            resultado = self._parsear_respuesta_ia(respuesta_ia, titulo_limpio, contenido_limpio, fuente)
+            # Siempre usar resumen manual (sin IA)
+            resultado = self._generar_resumen_manual(titulo_limpio, contenido_limpio, fuente)
             
             # Guardar en cache
             self.resumen_cache[cache_key] = resultado
@@ -161,7 +132,7 @@ class ContentProcessor:
             return resultado
             
         except Exception as e:
-            print(f"❌ Error generando resumen con IA: {str(e)}")
+            print(f"❌ Error generando resumen: {str(e)}")
             return self._generar_resumen_manual(titulo, contenido, fuente)
     
     def _crear_prompt_resumen(self, titulo: str, contenido: str, fuente: str) -> str:
@@ -213,31 +184,26 @@ class ContentProcessor:
             return self._generar_resumen_manual(titulo, contenido, fuente)
     
     def _generar_resumen_manual(self, titulo: str, contenido: str, fuente: str) -> Dict[str, str]:
-        """Generar resumen manual cuando IA no está disponible"""
+        """Generar resumen manual usando solo el primer párrafo (400 caracteres) sin repetir título"""
         # Limpiar título y contenido
         titulo_limpio = self._limpiar_titulo(titulo)
         contenido_limpio = self._limpiar_contenido(contenido)
         
-        # Extraer información clave del contenido
-        fecha = self._extraer_fecha(contenido)
-        tribunal = self._extraer_tribunal(contenido)
+        # Extraer el primer párrafo
+        primer_parrafo = self._extraer_primer_parrafo(contenido_limpio)
         
-        # Generar resumen básico directo
-        resumen = titulo_limpio
-        if tribunal:
-            resumen += f" del {tribunal}"
-        if fecha:
-            resumen += f" con fecha {fecha}"
-        resumen += ". "
+        # Eliminar repetición del título del contenido
+        contenido_sin_titulo = self._eliminar_titulo_del_contenido(primer_parrafo, titulo_limpio)
         
-        # Agregar información adicional del contenido si está disponible
-        if len(contenido_limpio) > 50:
-            # Tomar las primeras 100 palabras del contenido para complementar
-            palabras_adicionales = contenido_limpio.split()[:100]
-            contenido_adicional = ' '.join(palabras_adicionales)
-            resumen += contenido_adicional.strip()
-            if not resumen.endswith('.'):
-                resumen += '.'
+        # Limitar a 400 caracteres y agregar (...)
+        if len(contenido_sin_titulo) > 400:
+            resumen = contenido_sin_titulo[:400].strip()
+            # Asegurar que no corte en medio de una palabra
+            if not resumen.endswith(' '):
+                resumen = resumen.rsplit(' ', 1)[0]
+            resumen += " (...)"
+        else:
+            resumen = contenido_sin_titulo
         
         return {
             'titulo_resumen': titulo_limpio,
@@ -245,9 +211,54 @@ class ContentProcessor:
             'resumen_contenido': resumen,
             'puntos_clave': [],
             'implicaciones_juridicas': "",
-            'palabras_clave': [],  # Eliminar palabras clave
+            'palabras_clave': [],
             'fuente': fuente
         }
+    
+    def _eliminar_titulo_del_contenido(self, contenido: str, titulo: str) -> str:
+        """Eliminar repetición del título del contenido"""
+        if not contenido or not titulo:
+            return contenido
+        
+        # Limpiar el título para comparación
+        titulo_limpio = titulo.lower().strip()
+        contenido_limpio = contenido.lower().strip()
+        
+        # Si el contenido empieza con el título, eliminarlo
+        if contenido_limpio.startswith(titulo_limpio):
+            # Encontrar donde termina el título en el contenido original
+            titulo_original = titulo.strip()
+            contenido_original = contenido.strip()
+            
+            # Buscar el título al inicio del contenido
+            if contenido_original.lower().startswith(titulo_original.lower()):
+                # Extraer el contenido después del título
+                contenido_sin_titulo = contenido_original[len(titulo_original):].strip()
+                
+                # Limpiar caracteres extra al inicio (puntos, guiones, espacios)
+                contenido_sin_titulo = re.sub(r'^[.\-\s]+', '', contenido_sin_titulo)
+                
+                return contenido_sin_titulo
+        
+        return contenido
+    
+    def _extraer_primer_parrafo(self, contenido: str) -> str:
+        """Extraer el primer párrafo del contenido"""
+        if not contenido:
+            return ""
+        
+        # Dividir por párrafos (doble salto de línea)
+        parrafos = contenido.split('\n\n')
+        
+        # Tomar el primer párrafo no vacío
+        for parrafo in parrafos:
+            parrafo_limpio = parrafo.strip()
+            if parrafo_limpio and len(parrafo_limpio) > 10:  # Al menos 10 caracteres
+                return parrafo_limpio
+        
+        # Si no hay párrafos claros, tomar las primeras 200 palabras
+        palabras = contenido.split()[:200]
+        return ' '.join(palabras)
     
     def _generar_resumen_basico(self, contenido: str) -> str:
         """Generar resumen básico del contenido"""
@@ -275,6 +286,16 @@ class ContentProcessor:
         
         # Patrones a eliminar
         patrones_a_eliminar = [
+            # Información del Tribunal Ambiental (texto problemático)
+            r'Acceder al expediente de la causa[A-Z0-9\-]+.*?contacto@tribunalambiental\.cl\.',
+            r'Acceder al expediente[A-Z0-9\-]+.*?contacto@tribunalambiental\.cl\.',
+            r'Morandé 360, Piso 8, Santiago.*?contacto@tribunalambiental\.cl\.',
+            r'Piso 8, Santiago\([0-9\s\+]+\)contacto@tribunalambiental\.cl\.',
+            r'\([0-9\s\+]+\)contacto@tribunalambiental\.cl\.',
+            r'contacto@tribunalambiental\.cl\.',
+            r'R-[0-9\-]+ Morandé 360, Piso 8, Santiago',
+            r'Piso 8, Santiago\([0-9\s\+]+\), Piso 8, Santiago',
+            
             # Información del Poder Judicial
             r'Poder Judicial Radio.*?Compartir',
             r'Los horarios de atención son.*?horas\.',
@@ -374,6 +395,13 @@ class ContentProcessor:
         
         # Eliminar fechas y horas del título (más agresivo)
         patrones_fecha_hora = [
+            # Patrones específicos para el ejemplo dado (fechas pegadas al final)
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}$',  # 01-08-2025 04:08
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}$',  # 1-8-2025 4:08
+            r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s*$',  # Con espacios al final
+            r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}\s*$',  # Con espacios al final
+            
+            # Patrones generales de fecha y hora
             r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}',  # DD-MM-YYYY HH:MM
             r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}',  # DD/MM/YYYY HH:MM
             r'\d{2}:\d{2}',  # Solo hora
@@ -384,11 +412,13 @@ class ContentProcessor:
             r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}',  # D/M/YYYY H:MM
             r'\d{1,2}-\d{1,2}-\d{4}',  # D-M-YYYY
             r'\d{1,2}/\d{1,2}/\d{4}',  # D/M/YYYY
+            
             # Patrones específicos del Poder Judicial
             r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s*$',  # Fecha y hora al final
             r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}\s*$',  # Fecha y hora al final
             r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}\s*$',  # Fecha y hora al final
             r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s*$',  # Fecha y hora al final
+            
             # Patrones específicos para el ejemplo dado
             r'\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}$',  # 26-07-2025 04:07
             r'\d{2}-\d{2}-\d{4}\s+\d{1,2}:\d{2}$',  # 26-07-2025 4:07
@@ -540,8 +570,61 @@ class ContentProcessor:
         
         return None
     
+    def _limpiar_duplicacion_titulo(self, titulo: str, contenido: str) -> str:
+        """Eliminar el título del inicio del contenido si está duplicado"""
+        # Limpiar el título de prefijos para comparar
+        titulo_limpio = titulo
+        if titulo.startswith('(') and ')' in titulo:
+            titulo_limpio = titulo.split(')', 1)[1].strip()
+        
+        # Si el contenido comienza con el título (con o sin prefijo), quitarlo
+        if contenido.startswith(titulo):
+            contenido_limpio = contenido[len(titulo):].strip()
+        elif contenido.startswith(titulo_limpio):
+            contenido_limpio = contenido[len(titulo_limpio):].strip()
+        else:
+            # Buscar el título al inicio del contenido (más flexible)
+            palabras_titulo = titulo_limpio.split()[:5]  # Primeras 5 palabras del título
+            if len(palabras_titulo) >= 3:
+                inicio_titulo = ' '.join(palabras_titulo[:3])
+                if contenido.lower().startswith(inicio_titulo.lower()):
+                    # Encontrar donde termina el título en el contenido
+                    try:
+                        fin_titulo = contenido.lower().find(inicio_titulo.lower()) + len(inicio_titulo)
+                        # Buscar un punto de corte natural (fecha, punto, etc.)
+                        resto = contenido[fin_titulo:]
+                        if resto:
+                            # Buscar el primer punto de corte natural
+                            cortes = [' 20', '. ', '\n', '  ']
+                            for corte in cortes:
+                                idx = resto.find(corte)
+                                if idx >= 0 and idx < 100:  # Dentro de los primeros 100 caracteres
+                                    contenido_limpio = resto[idx:].strip()
+                                    if corte.strip():
+                                        contenido_limpio = contenido_limpio[len(corte):].strip()
+                                    break
+                            else:
+                                contenido_limpio = contenido
+                        else:
+                            contenido_limpio = contenido
+                    except:
+                        contenido_limpio = contenido
+                else:
+                    contenido_limpio = contenido
+            else:
+                contenido_limpio = contenido
+        
+        # Eliminar fechas sueltas al inicio (formato DD mes YYYY o similar)
+        import re
+        contenido_limpio = re.sub(r'^\d{1,2}\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+\d{4}\s*', '', contenido_limpio, flags=re.IGNORECASE)
+        
+        return contenido_limpio.strip()
+
     def _aplicar_prefijo_fuente(self, titulo: str, contenido: str, fuente: str) -> Tuple[str, str]:
         """Aplicar prefijo según la fuente para tribunales ambientales"""
+        # Primero limpiar duplicación del título
+        contenido_limpio = self._limpiar_duplicacion_titulo(titulo, contenido)
+        
         prefijos = {
             '1ta': '(1º)',
             '3ta': '(3º)',
@@ -553,15 +636,15 @@ class ContentProcessor:
             # Aplicar prefijo al título
             titulo_con_prefijo = f"{prefijo} {titulo}"
             
-            # Aplicar prefijo al contenido si no empieza con el prefijo
-            if not contenido.startswith(prefijo):
-                contenido_con_prefijo = f"{prefijo} {contenido}"
+            # Aplicar prefijo al contenido limpio si no empieza con el prefijo
+            if not contenido_limpio.startswith(prefijo):
+                contenido_con_prefijo = f"{prefijo} {contenido_limpio}"
             else:
-                contenido_con_prefijo = contenido
+                contenido_con_prefijo = contenido_limpio
                 
             return titulo_con_prefijo, contenido_con_prefijo
         
-        return titulo, contenido
+        return titulo, contenido_limpio
     
     def procesar_noticia_completa(self, noticia_raw: Dict) -> Dict[str, any]:
         """Procesar noticia completa con resumen ejecutivo"""

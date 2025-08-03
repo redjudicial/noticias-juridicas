@@ -42,7 +42,10 @@ class PrimerTribunalAmbientalScraper(BaseScraper):
             response = self.session.get(self.noticias_url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             noticias = []
             
             # Buscar artículos de noticias
@@ -106,7 +109,10 @@ class PrimerTribunalAmbientalScraper(BaseScraper):
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             
             # Buscar contenido principal
             contenido_selectors = [

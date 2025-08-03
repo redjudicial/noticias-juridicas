@@ -21,6 +21,7 @@ from backend.scrapers.fuentes.data_schema import (
     Jurisdiccion,
     TipoDocumento
 )
+from backend.scrapers.fuentes.date_extractor import date_extractor
 
 class TDPScraper(BaseScraper):
     """Scraper para el Tribunal de Propiedad Industrial de Chile"""
@@ -49,61 +50,61 @@ class TDPScraper(BaseScraper):
             response = self.session.get(self.noticias_url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             
             # Buscar enlaces de noticias
             noticias_links = []
             
-            # Buscar enlaces "Seguir leyendo" que son las noticias
-            seguir_leyendo_links = soup.find_all('a', text=re.compile(r'seguir leyendo', re.IGNORECASE))
+            # Método 1: Buscar títulos con enlaces "Seguir leyendo"
+            # Las noticias tienen estructura: <h3>título</h3> ... <a>Seguir leyendo</a>
+            h3_titles = soup.find_all('h3')
             
-            for link in seguir_leyendo_links:
-                href = link.get('href', '')
-                if href:
-                    # Buscar el título en el elemento padre o cercano
-                    titulo = ""
+            for h3 in h3_titles:
+                titulo = h3.get_text(strip=True)
+                
+                if titulo and len(titulo) > 10:
+                    # Buscar el enlace "Seguir leyendo" en el siguiente contenido
+                    next_sibling = h3.find_next_sibling()
+                    url = None
                     
-                    # Buscar en el elemento padre
-                    parent = link.parent
-                    if parent:
-                        # Buscar título en elementos cercanos
-                        title_elem = parent.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-                        if title_elem:
-                            titulo = title_elem.get_text(strip=True)
-                        else:
-                            # Buscar en elementos con clase de título
-                            title_elem = parent.find(class_=re.compile(r'title|titulo|entry-title|post-title'))
-                            if title_elem:
-                                titulo = title_elem.get_text(strip=True)
+                    # Buscar en los siguientes 5 elementos hermanos
+                    current = h3
+                    for _ in range(5):
+                        current = current.find_next()
+                        if current and current.name == 'a':
+                            href = current.get('href', '')
+                            if href and ('seguir' in current.get_text().lower() or 
+                                       '2025' in href or 'tdpi.cl' in href):
+                                url = href
+                                break
+                        elif current and current.find('a'):
+                            link = current.find('a')
+                            href = link.get('href', '')
+                            if href and ('seguir' in link.get_text().lower() or 
+                                       '2025' in href or 'tdpi.cl' in href):
+                                url = href
+                                break
                     
-                    # Si no se encuentra título, buscar en elementos hermanos
-                    if not titulo:
-                        # Buscar en el elemento padre del padre
-                        grandparent = parent.parent if parent else None
-                        if grandparent:
-                            title_elem = grandparent.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-                            if title_elem:
-                                titulo = title_elem.get_text(strip=True)
+                    # Si no se encuentra el enlace, buscar en toda la página enlaces que contengan el título
+                    if not url:
+                        all_links = soup.find_all('a', href=True)
+                        for link in all_links:
+                            href = link.get('href', '')
+                            if href and ('2025' in href or 'tdpi.cl' in href):
+                                # Verificar si el enlace está cerca del título
+                                url = href
+                                break
                     
-                    # Si aún no se encuentra título, extraer de la URL
-                    if not titulo:
-                        # Extraer título de la URL (última parte)
-                        url_parts = href.split('/')
-                        if len(url_parts) > 1:
-                            last_part = url_parts[-1]
-                            if last_part:
-                                # Convertir guiones a espacios y capitalizar
-                                titulo = last_part.replace('-', ' ').replace('_', ' ').title()
-                    
-                    # Construir URL completa
-                    if href.startswith('/'):
-                        url = self.base_url + href
-                    elif href.startswith('http'):
-                        url = href
-                    else:
-                        url = self.base_url + '/' + href
-                    
-                    if titulo and len(titulo) > 5:
+                    if url:
+                        # Construir URL completa
+                        if url.startswith('/'):
+                            url = self.base_url + url
+                        elif not url.startswith('http'):
+                            url = self.base_url + '/' + url
+                        
                         noticias_links.append({
                             'url': url,
                             'titulo': titulo
@@ -112,19 +113,32 @@ class TDPScraper(BaseScraper):
                         if len(noticias_links) >= max_noticias:
                             break
             
-            # Si no se encontraron enlaces "Seguir leyendo", buscar otros patrones
-            if not noticias_links:
+            # Método 2: Si no hay suficientes noticias, buscar enlaces que contengan fechas
+            if len(noticias_links) < 3:
                 # Buscar enlaces que contengan fechas (formato YYYY/MM/DD)
                 date_links = soup.find_all('a', href=re.compile(r'/\d{4}/\d{2}/\d{2}/'))
                 
                 for link in date_links:
                     href = link.get('href', '')
-                    titulo = link.get_text(strip=True)
                     
-                    if (href and 
-                        titulo and 
-                        len(titulo) > 10 and
-                        not any(excl in titulo.lower() for excl in ['inicio', 'menu', 'contacto', 'transparencia', 'página', 'anterior', 'siguiente'])):
+                    # Buscar el título en el contexto cercano
+                    titulo = ""
+                    
+                    # Buscar título en elementos hermanos anteriores
+                    prev_elem = link.find_previous(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                    if prev_elem:
+                        titulo = prev_elem.get_text(strip=True)
+                    
+                    # Si no se encuentra, extraer de la URL
+                    if not titulo:
+                        url_parts = href.split('/')
+                        if len(url_parts) > 3:
+                            last_part = url_parts[-1]
+                            if last_part:
+                                titulo = last_part.replace('-', ' ').replace('_', ' ').title()
+                    
+                    if (href and titulo and len(titulo) > 10 and
+                        not any(excl in titulo.lower() for excl in ['inicio', 'menu', 'contacto', 'transparencia'])):
                         
                         # Construir URL completa
                         if href.startswith('/'):
@@ -134,24 +148,18 @@ class TDPScraper(BaseScraper):
                         else:
                             url = self.base_url + '/' + href
                         
-                        noticias_links.append({
-                            'url': url,
-                            'titulo': titulo
-                        })
-                        
-                        if len(noticias_links) >= max_noticias:
-                            break
+                        # Evitar duplicados
+                        if not any(n['url'] == url for n in noticias_links):
+                            noticias_links.append({
+                                'url': url,
+                                'titulo': titulo
+                            })
+                            
+                            if len(noticias_links) >= max_noticias:
+                                break
             
-            # Eliminar duplicados
-            seen_urls = set()
-            unique_links = []
-            for link in noticias_links:
-                if link['url'] not in seen_urls:
-                    seen_urls.add(link['url'])
-                    unique_links.append(link)
-            
-            self._log_success(f"Encontradas {len(unique_links)} noticias del TDPI")
-            return unique_links[:max_noticias]
+            self._log_success(f"Encontradas {len(noticias_links)} noticias del TDPI")
+            return noticias_links[:max_noticias]
             
         except Exception as e:
             self._log_error("Error obteniendo noticias del TDPI", e)
@@ -165,7 +173,10 @@ class TDPScraper(BaseScraper):
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Configurar encoding para evitar problemas de codificación
+            response.encoding = 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')  # Usar response.text en lugar de response.content
             
             # Extraer título
             if not titulo:
@@ -204,7 +215,7 @@ class TDPScraper(BaseScraper):
                 self._log_warning(f"Contenido limitado para {url}, usando título como contenido")
             
             # Extraer fecha
-            fecha = self._extract_fecha_tdpi(soup)
+            fecha = self._extract_fecha_universal(soup, url)
             if not fecha:
                 fecha = datetime.now(timezone.utc)
             
@@ -231,16 +242,12 @@ class TDPScraper(BaseScraper):
             info_legal = self._extract_info_legal_tdpi(soup, contenido)
             
             # Crear noticia estandarizada
-            noticia = self._crear_noticia_estandarizada(
+            noticia = NoticiaEstandarizada(
                 titulo=titulo,
                 cuerpo_completo=contenido,
                 fecha_publicacion=fecha,
                 fuente='tdpi',
-                fuente_nombre_completo='Tribunal de Propiedad Industrial',
                 url_origen=url,
-                url_imagen=url_imagen,
-                autor=autor,
-                version_scraper=self.version_scraper,
                 **info_legal
             )
             
@@ -254,6 +261,17 @@ class TDPScraper(BaseScraper):
         except Exception as e:
             self._log_error(f"Error extrayendo noticia del TDPI {url}", e)
             return None
+    
+    def _extract_fecha_universal(self, soup: BeautifulSoup, url: str = None) -> datetime:
+        """Extraer fecha usando extractor universal"""
+        try:
+            fecha = date_extractor.extract_date_from_html(soup, url)
+            if fecha:
+                return fecha
+            return datetime.now(timezone.utc)
+        except Exception as e:
+            print(f"⚠️ Error extrayendo fecha: {e}")
+            return datetime.now(timezone.utc)
     
     def _extract_fecha_tdpi(self, soup: BeautifulSoup) -> Optional[datetime]:
         """Extraer fecha de publicación específica de TDPI"""

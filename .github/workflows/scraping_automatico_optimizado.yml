@@ -1,14 +1,14 @@
-name: Scraping Automático de Noticias Jurídicas (Optimizado)
+name: Scraping Automático de Noticias Jurídicas (24/7 - Cada Hora)
 
 on:
   schedule:
-    # Ejecutar cada 30 minutos en horario hábil (Lunes a Viernes, 9:00-17:00 hora de Chile)
-    # Chile está en UTC-3, así que 9:00-17:00 Chile = 12:00-20:00 UTC
+    # Ejecutar cada hora, 24/7
     # Cron: minuto hora día mes día_semana
-    # 0,30 = cada 30 minutos (reducido de 15 minutos)
-    # 12-20 = 9:00-17:00 hora Chile (reducido de 8:00-18:00)
-    # 1-5 = Lunes a Viernes (reducido de Lunes a Sábado)
-    - cron: '0,30 12-20 * * 1-5'
+    # 0 = cada hora en el minuto 0
+    # * = todos los días del mes
+    # * = todos los meses
+    # * = todos los días de la semana
+    - cron: '0 * * * *'
   
   workflow_dispatch:  # Permitir ejecución manual
     inputs:
@@ -69,7 +69,7 @@ jobs:
         
     - name: Ejecutar scraping optimizado
       run: |
-        echo "🚀 Iniciando scraping automático optimizado..."
+        echo "🚀 Iniciando scraping automático 24/7 (cada hora)..."
         echo "📅 Fecha: $(date)"
         echo "⏰ Hora: $(date +%H:%M:%S)"
         

@@ -1,321 +1,219 @@
 #!/usr/bin/env python3
 """
-Scraper para el Instituto Nacional de Propiedad Industrial (INAPI) de Chile
+Scraper corregido para INAPI basado en la estructura real
 """
 
-import sys
-import os
-from typing import List, Dict, Optional
-from datetime import datetime, timezone
+import requests
 from bs4 import BeautifulSoup
 import re
-from urllib.parse import urljoin
+from datetime import datetime
+import hashlib
+from typing import List, Optional
+from ..data_schema import NoticiaEstandarizada, Categoria, Jurisdiccion, TipoDocumento
+import hashlib
 
-# Agregar el directorio padre al path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-
-from backend.scrapers.fuentes.base_scraper import BaseScraper
-from backend.scrapers.fuentes.data_schema import (
-    NoticiaEstandarizada, 
-    MetadataNoticia,
-    DataNormalizer,
-    Categoria,
-    Jurisdiccion,
-    TipoDocumento
-)
-
-class INAPIScraper(BaseScraper):
-    """Scraper para el Instituto Nacional de Propiedad Industrial (INAPI) de Chile"""
-    
+class INAPIScraper:
     def __init__(self, openai_api_key: str = None):
-        super().__init__(openai_api_key)
         self.base_url = "https://www.inapi.cl"
         self.noticias_url = "https://www.inapi.cl/sala-de-prensa/noticias"
-        self.version_scraper = "1.0"
-        
-        # Headers específicos para INAPI
+        self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+        self.openai_api_key = openai_api_key
     
-    def get_noticias_recientes(self, max_noticias: int = 20) -> List[Dict]:
-        """Obtener lista de noticias recientes de INAPI"""
+    def extraer_noticias_lista(self):
+        """Extraer lista de noticias de la página principal"""
         try:
-            print("ℹ️ Iniciando scraping del Instituto Nacional de Propiedad Industrial...")
-            print("ℹ️ Obteniendo noticias de INAPI...")
+            response = self.session.get(self.noticias_url, timeout=10)
+            if response.status_code != 200:
+                print(f"❌ Error accediendo a {self.noticias_url}: {response.status_code}")
+                return []
             
-            response = self.session.get(self.noticias_url, timeout=30)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
+            soup = BeautifulSoup(response.text, 'html.parser')
             noticias = []
             
-            # Buscar noticias en la estructura de INAPI
-            selectores_noticias = [
-                '.noticia',
-                '.news-item',
-                '.post',
-                'article',
-                '.content-item',
-                '.press-release',
-                'a[href*="/noticia"]',
-                'a[href*="/sala-de-prensa"]'
-            ]
+            # Buscar enlaces que contengan 'detalle-noticia'
+            enlaces = soup.find_all('a', href=True)
             
-            elementos_noticias = []
-            for selector in selectores_noticias:
-                elementos = soup.select(selector)
-                if elementos:
-                    elementos_noticias.extend(elementos[:max_noticias])
-                    break
+            for enlace in enlaces:
+                href = enlace.get('href')
+                texto = enlace.get_text(strip=True)
+                
+                # Filtrar enlaces de noticias
+                if 'detalle-noticia' in href and texto:
+                    # Construir URL completa
+                    if href.startswith('/'):
+                        url_completa = f"{self.base_url}{href}"
+                    elif href.startswith('http'):
+                        url_completa = href
+                    else:
+                        url_completa = f"{self.base_url}/{href}"
+                    
+                    # Extraer información básica
+                    noticia = NoticiaEstandarizada(
+                        titulo=texto,
+                        cuerpo_completo=texto,  # Por ahora usamos el título como contenido
+                        fecha_publicacion=datetime.now().replace(tzinfo=None),
+                        fuente='inapi',
+                        url_origen=url_completa,
+                        categoria=Categoria.ORGANISMO,
+                        jurisdiccion=Jurisdiccion.NACIONAL,
+                        tipo_documento=TipoDocumento.NOTICIA
+                    )
+                    
+                    # Extraer contenido completo
+                    contenido_completo = self.extraer_contenido_noticia(url_completa)
+                    if contenido_completo:
+                        # Usar el contenido completo en lugar del básico
+                        noticias.append(contenido_completo)
+                    else:
+                        # Si no se puede extraer contenido completo, usar el básico
+                        noticias.append(noticia)
             
-            # Si no encuentra elementos específicos, buscar enlaces relevantes
-            if not elementos_noticias:
-                enlaces = soup.find_all('a', href=True)
-                for enlace in enlaces:
-                    href = enlace.get('href')
-                    texto = enlace.get_text(strip=True)
-                    
-                    if (href and texto and len(texto) > 20 and
-                        any(keyword in texto.lower() for keyword in [
-                            'propiedad industrial', 'patente', 'marca', 'diseño',
-                            'inapi', 'registro', 'invención', 'innovación'
-                        ])):
-                        
-                        url_completa = urljoin(self.base_url, href)
-                        fecha_elem = enlace.find_parent().find(['time', '.fecha', '.date'])
-                        fecha = self._extraer_fecha_texto(fecha_elem.get_text() if fecha_elem else "")
-                        
-                        noticias.append({
-                            'titulo': texto,
-                            'url': url_completa,
-                            'fecha': fecha.strftime('%d/%m/%Y') if fecha else datetime.now().strftime('%d/%m/%Y')
-                        })
-                        
-                        if len(noticias) >= max_noticias:
-                            break
-            else:
-                # Procesar elementos encontrados
-                for elemento in elementos_noticias:
-                    titulo_elem = elemento.find(['h1', 'h2', 'h3', 'h4', '.title', '.titulo'])
-                    enlace_elem = elemento.find('a', href=True)
-                    
-                    if not titulo_elem and enlace_elem:
-                        titulo_elem = enlace_elem
-                    
-                    if titulo_elem and enlace_elem:
-                        titulo = titulo_elem.get_text(strip=True)
-                        href = enlace_elem.get('href')
-                        url_completa = urljoin(self.base_url, href)
-                        
-                        fecha_elem = elemento.find(['time', '.fecha', '.date'])
-                        fecha = self._extraer_fecha_texto(fecha_elem.get_text() if fecha_elem else "")
-                        
-                        noticias.append({
-                            'titulo': titulo,
-                            'url': url_completa,
-                            'fecha': fecha.strftime('%d/%m/%Y') if fecha else datetime.now().strftime('%d/%m/%Y')
-                        })
-            
-            print(f"✅ Encontradas {len(noticias)} noticias de INAPI")
             return noticias
             
         except Exception as e:
-            print(f"❌ Error obteniendo noticias de INAPI: {str(e)}")
+            print(f"❌ Error extrayendo lista de noticias: {e}")
             return []
     
-    def _extraer_fecha_texto(self, texto: str) -> Optional[datetime]:
-        """Extraer fecha de un texto"""
-        if not texto:
-            return None
-            
-        # Patrones de fecha comunes
-        patrones = [
-            r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',
-            r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})',
-            r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})'
-        ]
-        
-        for patron in patrones:
-            match = re.search(patron, texto)
-            if match:
-                try:
-                    if 'de' in patron:  # Formato "dd de mes de yyyy"
-                        dia, mes_nombre, año = match.groups()
-                        meses = {
-                            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
-                            'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
-                            'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
-                        }
-                        mes = meses.get(mes_nombre.lower(), 1)
-                        return datetime(int(año), mes, int(dia), tzinfo=timezone.utc)
-                    else:
-                        grupos = match.groups()
-                        if len(grupos[0]) == 4:  # yyyy-mm-dd
-                            return datetime(int(grupos[0]), int(grupos[1]), int(grupos[2]), tzinfo=timezone.utc)
-                        else:  # dd-mm-yyyy
-                            return datetime(int(grupos[2]), int(grupos[1]), int(grupos[0]), tzinfo=timezone.utc)
-                except:
-                    continue
-        
-        return None
-    
-    def get_noticia_completa(self, url: str, titulo: str = None, fecha_str: str = None) -> Optional[NoticiaEstandarizada]:
-        """Obtener noticia completa de INAPI"""
+    def extraer_contenido_noticia(self, url):
+        """Extraer contenido completo de una noticia específica"""
         try:
-            print(f"ℹ️ Extrayendo noticia de INAPI: {url}")
-            
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Extraer título si no se proporcionó
-            if not titulo:
-                titulo_elem = soup.find('h1') or soup.find('title')
-                titulo = titulo_elem.get_text(strip=True) if titulo_elem else "Sin título"
-            
-            # Extraer contenido principal
-            contenido = self._extraer_contenido_principal(soup)
-            
-            if not contenido or len(contenido) < 50:
-                print("❌ Contenido insuficiente")
+            response = self.session.get(url, timeout=10)
+            if response.status_code != 200:
                 return None
             
-            # Extraer fecha si no se proporcionó
-            fecha_publicacion = self._extraer_fecha(soup, fecha_str)
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Crear noticia estandarizada
-            noticia = NoticiaEstandarizada(
-                titulo=titulo[:200],  # Límite de título
-                cuerpo_completo=contenido[:2000],  # Límite de contenido
-                fecha_publicacion=fecha_publicacion,
-                fuente="inapi",
+            # Extraer título
+            titulo = soup.find('h1') or soup.find('title')
+            titulo_texto = titulo.get_text(strip=True) if titulo else ""
+            
+            # Extraer contenido
+            contenido = ""
+            
+            # Buscar contenido en diferentes selectores
+            selectores_contenido = [
+                'article',
+                '.contenido',
+                '.noticia-contenido',
+                'main',
+                '.post-content'
+            ]
+            
+            for selector in selectores_contenido:
+                contenido_elem = soup.select_one(selector)
+                if contenido_elem:
+                    # Remover elementos no deseados
+                    for elem in contenido_elem.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+                        elem.decompose()
+                    
+                    contenido = contenido_elem.get_text(strip=True)
+                    break
+            
+            # Si no se encuentra con selectores específicos, usar body
+            if not contenido:
+                body = soup.find('body')
+                if body:
+                    # Remover elementos no deseados
+                    for elem in body.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside', 'menu']):
+                        elem.decompose()
+                    
+                    contenido = body.get_text(strip=True)
+            
+            # Extraer fecha
+            fecha = self.extraer_fecha(soup)
+            
+            # Generar hash
+            hash_contenido = hashlib.md5(f"{titulo_texto}|{contenido[:200]}|{url}".encode('utf-8')).hexdigest()
+            
+            return NoticiaEstandarizada(
+                titulo=titulo_texto,
+                cuerpo_completo=contenido,
+                fecha_publicacion=fecha,
+                fuente='inapi',
                 url_origen=url,
-                categoria=Categoria.NORMATIVA,  # INAPI maneja normativas de propiedad industrial
+                categoria=Categoria.ORGANISMO,
                 jurisdiccion=Jurisdiccion.NACIONAL,
                 tipo_documento=TipoDocumento.NOTICIA,
-                fuente_nombre_completo="Instituto Nacional de Propiedad Industrial",
-                tribunal_organismo="INAPI"
+                hash_contenido=hash_contenido
             )
             
-            print("✅ Noticia válida")
-            print(f"✅ Noticia de INAPI extraída: {titulo[:50]}...")
-            return noticia
-            
         except Exception as e:
-            print(f"❌ Error extrayendo noticia de INAPI {url}: {str(e)}")
+            print(f"❌ Error extrayendo contenido de {url}: {e}")
             return None
     
-    def _extraer_contenido_principal(self, soup: BeautifulSoup) -> str:
-        """Extraer el contenido principal de la página"""
-        # Buscar contenido en diferentes selectores comunes
-        selectores = [
-            'article',
-            '.content',
-            '.noticia',
-            '.news-content',
-            '#content',
-            'main',
-            '.main-content',
-            '.post-content',
-            '.entry-content'
-        ]
-        
-        for selector in selectores:
-            contenido_elem = soup.select_one(selector)
-            if contenido_elem:
-                contenido = self._limpiar_contenido(contenido_elem)
-                if len(contenido) > 100:
-                    return contenido
-        
-        # Fallback: buscar en el body excluyendo navegación
-        body = soup.find('body')
-        if body:
-            # Remover elementos de navegación
-            for elem in body.find_all(['nav', 'header', 'footer', 'aside', 'menu']):
-                elem.decompose()
-            
-            contenido = self._limpiar_contenido(body)
-            return contenido
-        
-        return ""
-    
-    def _extraer_fecha(self, soup: BeautifulSoup, fecha_str: str = None) -> datetime:
-        """Extraer fecha de publicación"""
-        if fecha_str:
-            try:
-                return datetime.strptime(fecha_str, '%d/%m/%Y').replace(tzinfo=timezone.utc)
-            except:
-                pass
-        
-        # Buscar fecha en meta tags
-        fecha_meta = soup.find('meta', {'name': 'date'}) or soup.find('meta', {'property': 'article:published_time'})
-        if fecha_meta:
-            try:
-                fecha_valor = fecha_meta.get('content')
-                return datetime.fromisoformat(fecha_valor.replace('Z', '+00:00'))
-            except:
-                pass
-        
-        # Buscar fecha en elementos time
-        time_elem = soup.find('time')
-        if time_elem:
-            datetime_attr = time_elem.get('datetime')
-            if datetime_attr:
-                try:
-                    return datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
-                except:
-                    pass
-        
-        # Buscar fecha en el texto
-        texto = soup.get_text()
-        fecha_extraida = self._extraer_fecha_texto(texto)
-        if fecha_extraida:
-            return fecha_extraida
-        
-        # Fecha por defecto
-        return datetime.now(timezone.utc)
-    
-    def scrape_noticias_recientes(self, max_noticias: int = 10) -> List[NoticiaEstandarizada]:
-        """Scraper principal que obtiene noticias completas de INAPI"""
+    def extraer_fecha(self, soup):
+        """Extraer fecha de la noticia"""
         try:
-            print("🔍 Extrayendo noticias de INAPI...")
+            # Buscar fecha en diferentes formatos
+            fecha_patterns = [
+                r'(\w+\s+\d{1,2}\s+\w+\s+de\s+2025)',
+                r'(\d{1,2}/\d{1,2}/2025)',
+                r'(\d{4}-\d{2}-\d{2})',
+                r'(\w+\.\s+\d{1,2},\s+2025)'
+            ]
             
-            # Obtener lista de noticias
-            noticias_raw = self.get_noticias_recientes(max_noticias)
+            texto_completo = soup.get_text()
             
-            if not noticias_raw:
-                print("⚠️ No se encontraron noticias de INAPI")
-                return []
-            
-            noticias_procesadas = []
-            
-            for noticia_raw in noticias_raw:
-                try:
-                    # Procesar cada noticia
-                    noticia_completa = self.get_noticia_completa(
-                        url=noticia_raw['url'],
-                        titulo=noticia_raw['titulo'],
-                        fecha_str=noticia_raw.get('fecha')
-                    )
+            for pattern in fecha_patterns:
+                match = re.search(pattern, texto_completo)
+                if match:
+                    fecha_str = match.group(1)
                     
-                    if noticia_completa:
-                        noticias_procesadas.append(noticia_completa)
+                    # Intentar parsear diferentes formatos
+                    try:
+                        # Formato: "31 de julio de 2025"
+                        if ' de ' in fecha_str:
+                            meses = {
+                                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                                'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                                'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+                            }
+                            partes = fecha_str.split(' de ')
+                            if len(partes) == 3:
+                                dia = int(partes[0])
+                                mes = meses.get(partes[1].lower(), 1)
+                                año = int(partes[2])
+                                return datetime(año, mes, dia).replace(tzinfo=None)
                         
-                except Exception as e:
-                    print(f"❌ Error procesando noticia de INAPI: {str(e)}")
-                    continue
+                        # Formato: "31/07/2025"
+                        elif '/' in fecha_str:
+                            return datetime.strptime(fecha_str, '%d/%m/%Y').replace(tzinfo=None)
+                        
+                        # Formato: "2025-07-31"
+                        elif '-' in fecha_str:
+                            return datetime.strptime(fecha_str, '%Y-%m-%d').replace(tzinfo=None)
+                        
+                        # Formato: "Jul. 31, 2025"
+                        elif ',' in fecha_str:
+                            return datetime.strptime(fecha_str, '%b. %d, %Y').replace(tzinfo=None)
+                            
+                    except ValueError:
+                        pass
             
-            print(f"✅ INAPI: {len(noticias_procesadas)} noticias estandarizadas")
-            return noticias_procesadas
+            # Si no se encuentra, usar fecha actual
+            return datetime.now().replace(tzinfo=None)
             
         except Exception as e:
-            print(f"❌ Error en scraping de INAPI: {str(e)}")
-            return [] 
+            print(f"❌ Error extrayendo fecha: {e}")
+            return datetime.now().replace(tzinfo=None)
+    
+    def scrape(self):
+        """Método principal de scraping"""
+        print("🔍 Iniciando scraping del INAPI (versión corregida)...")
+        noticias = self.extraer_noticias_lista()
+        print(f"✅ Se extrajeron {len(noticias)} noticias del INAPI")
+        return noticias
+    
+    def scrape_noticias_recientes(self, max_noticias: int = 10) -> List[NoticiaEstandarizada]:
+        """Método compatible con el sistema principal"""
+        return self.scrape()
+
+# Uso del scraper
+if __name__ == "__main__":
+    scraper = INAPIScraperCorregido()
+    noticias = scraper.scrape()
+    for noticia in noticias[:3]:
+        print(f"   📰 {noticia['titulo'][:50]}...")
