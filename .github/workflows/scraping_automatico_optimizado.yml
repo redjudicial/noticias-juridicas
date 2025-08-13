@@ -26,7 +26,7 @@ on:
 jobs:
   scraping-noticias:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Timeout reducido para ahorrar minutos
+    timeout-minutes: 25  # Aumentado para evitar cortes en ejecuciones más lentas
     
     steps:
     - name: Checkout código
@@ -57,6 +57,14 @@ jobs:
         echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> $GITHUB_ENV
         echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> $GITHUB_ENV
         echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+
+    - name: Verificar configuración de Supabase (previo)
+      run: |
+        echo "🔎 Verificando variables de entorno de Supabase..."
+        echo "SUPABASE_URL=$SUPABASE_URL"
+        echo "Probando lectura de conteo de noticias (previo)..."
+        curl -s -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+          "$SUPABASE_URL/rest/v1/noticias_juridicas?select=count" | cat
         
     - name: Crear archivo de configuración
       run: |
@@ -83,6 +91,18 @@ jobs:
           echo "⚡ MODO OPTIMIZADO: Solo fuentes funcionando, pocas noticias"
           python3 backend/main.py --once --working-only --max-noticias 3
         fi
+
+    - name: Diagnóstico Supabase (post-scraping)
+      run: |
+        echo "📊 Verificando conteo de noticias (posterior al scraping)..."
+        curl -s -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+          "$SUPABASE_URL/rest/v1/noticias_juridicas?select=count" | cat
+
+    - name: Test de conexión a Supabase (detallado)
+      if: always()
+      run: |
+        echo "🧪 Ejecutando test detallado de conexión a Supabase..."
+        python3 test_supabase_connection.py || true
         
     - name: Verificar resultados
       run: |
